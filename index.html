@@ -109,6 +109,7 @@ let tradeSocket=null, tradeSocketKey='', tradeReqId=5000, tradeRequests=new Map(
 let tradeArmed=false, tradeBusy=false, currentSignal=null, tradeAccounts=[];
 let tradeOrdersCount=0, tradeSessionPnL=0, tradeLossStreakCount=0;
 let closedContractIds=new Set(), autoCooldowns=new Map(), lastAutoOrderAt=0;
+let autoOrderQueue=[], autoQueueRunning=false, autoQueuedKeys=new Set();
 let activeContracts=new Map();
 const $ = id => document.getElementById(id);
 const mean = a => a.length ? a.reduce((s,v)=>s+v,0)/a.length : 0;
@@ -596,17 +597,60 @@ async function armTrading(){
   }catch(err){disarmTrading('Could not arm execution.');showTradeError(err.message);log(`Trading authorization failed: ${err.message}`);}
 }
 function maybeAutoExecute(tickedSymbol){
-  if(!tradeArmed||$('executionStyle').value!=='auto'||tradeBusy||!currentSignal?.eligible||!running)return;
-  // Only act when the market that generated the chosen best signal just ticked;
-  // don't place an order from a stale signal because a different market updated.
-  if(!tickedSymbol||currentSignal.symbol!==tickedSymbol)return;
-  const mode=tradeMode();if(mode==='real'&&$('realPhrase').value.trim()!=='TRADE REAL'){disarmTrading('REAL confirmation text is missing; execution paused.');showTradeError('Type TRADE REAL and arm again before real auto-execution.');return;}
-  const signal=currentSignal,m=markets.get(signal.symbol);if(!m)return;
-  const key=`${signal.symbol}|${signal.family}`,tickIndex=m.prices.length-1,allowAt=autoCooldowns.get(key)||-1;
-  if(tickIndex<allowAt||Date.now()-lastAutoOrderAt<1500)return;
-  const minScore=62;if(signal.score<minScore)return;
-  autoCooldowns.set(key,tickIndex+Math.max(5,Number(signal.horizon)||1)+4);lastAutoOrderAt=Date.now();
-  executeSignal({...signal},'auto').catch(err=>{showTradeError(err.message);setTradeStatus(`AUTO order blocked/failed: ${err.message}`);log(`AUTO execution blocked/failed: ${err.message}`);});
+  if(!tradeArmed||$('executionStyle').value!=='auto'||!running||!tickedSymbol)return;
+  const mode=tradeMode();
+  if(mode==='real'&&$('realPhrase').value.trim()!=='TRADE REAL'){
+    disarmTrading('REAL confirmation text is missing; execution paused.');
+    showTradeError('Type TRADE REAL and arm again before real auto-execution.');
+    return;
+  }
+  const m=markets.get(tickedSymbol);
+  if(!m||!m.connected)return;
+  // Evaluate the market that just ticked, not the single global "best setup".
+  // Stronger threshold reduces frequency; it does not guarantee a winning trade.
+  const signal=signalForMarket(m);
+  const minScore=75;
+  if(!signal?.eligible||signal.pick==='NO EDGE'||Number(signal.score)<minScore)return;
+  const key=`${signal.symbol}|${signal.family}`;
+  const tickIndex=m.prices.length-1,allowAt=autoCooldowns.get(key)||-1;
+  if(tickIndex<allowAt||autoQueuedKeys.has(key))return;
+  // Limit pending burst size so simultaneous market signals cannot create an
+  // unbounded order backlog. Orders are sent in a controlled queue over one socket.
+  if(autoOrderQueue.length>=3)return;
+  autoCooldowns.set(key,tickIndex+Math.max(5,Number(signal.horizon)||1)+4);
+  autoQueuedKeys.add(key);
+  autoOrderQueue.push({...signal,_autoKey:key});
+  log(`Strong signal queued: ${signal.market} · ${signal.pick} · score ${signal.score}/100 · queue ${autoOrderQueue.length}/3.`);
+  drainAutoOrderQueue();
+}
+async function drainAutoOrderQueue(){
+  if(autoQueueRunning)return;
+  autoQueueRunning=true;
+  try{
+    while(autoOrderQueue.length){
+      const signal=autoOrderQueue.shift();
+      const key=signal?._autoKey;
+      if(!signal)continue;
+      try{
+        if(!tradeArmed||$('executionStyle').value!=='auto'||!running)break;
+        if(autoOrderQueue.length>=0)lastAutoOrderAt=Date.now();
+        const cleanSignal={...signal};delete cleanSignal._autoKey;
+        await executeSignal(cleanSignal,'auto');
+      }catch(err){
+        showTradeError(err.message);
+        setTradeStatus(`AUTO order blocked/failed: ${err.message}`);
+        log(`AUTO order blocked/failed: ${err.message}`);
+      }finally{
+        if(key)autoQueuedKeys.delete(key);
+      }
+    }
+  }finally{
+    autoQueueRunning=false;
+    if(!tradeArmed||$('executionStyle').value!=='auto') {
+      for(const item of autoOrderQueue)if(item?._autoKey)autoQueuedKeys.delete(item._autoKey);
+      autoOrderQueue=[];
+    }
+  }
 }
 
 async function refreshAuth(){
