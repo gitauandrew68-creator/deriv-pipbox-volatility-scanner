@@ -227,7 +227,14 @@ function signalForFamily(m,family){
   if(matches)cand.push(matches);
   const eligibleFamily=cand.filter(c=>c.eligible);
   const allBest=(eligibleFamily.length?eligibleFamily:cand).sort((x,y)=>y.score-x.score)[0];
-  const familyBest=family==='ALL'?allBest:cand.filter(c=>c.family===family).sort((x,y)=>y.score-x.score)[0];
+  // When one family is selected, prefer its strongest QUALIFIED candidate.
+  // Previously we chose the highest raw score first, even when that candidate
+  // failed its evidence gates; that made a different qualified candidate in the
+  // same family invisible to Trade/AUTO and could trigger the "no qualified"
+  // error despite a valid setup being available.
+  const familyCandidates=family==='ALL'?cand:cand.filter(c=>c.family===family);
+  const eligibleSelectedFamily=familyCandidates.filter(c=>c.eligible);
+  const familyBest=family==='ALL'?allBest:(eligibleSelectedFamily.length?eligibleSelectedFamily:familyCandidates).sort((x,y)=>y.score-x.score)[0];
   const best=familyBest||allBest;
   const eligible=Boolean(best?.eligible);
   const quality=eligible?(best.score>=76?'A':'B'):(best.score>=55?'WATCH':'NO EDGE');
@@ -532,7 +539,7 @@ function validateTradeRisk(){
 }
 async function executeSignal(signal,source='manual'){
   if(!tradeArmed)throw new Error('Execution is disarmed. Press Connect account & arm execution first.');
-  if(!signal||!signal.eligible||!signal.symbol||!signal.pick)throw new Error('There is no currently qualified signal to trade.');
+  if(!signal||!signal.eligible||!signal.symbol||!signal.pick)throw new Error('No fresh strong signal passed the selected family's evidence checks. The scanner will wait for the next top-ranked valid setup; no weak order was sent.');
   if(tradeBusy)throw new Error('An order request is already in progress.');
   const risk=validateTradeRisk(),account=selectedTradeAccount(),mode=tradeMode();
   if(!account)throw new Error('Select an authorized account first.');
