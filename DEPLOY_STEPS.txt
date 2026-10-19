@@ -1,0 +1,24 @@
+DERIV PIPBOX SCANNER — PUBLIC DEPLOY STEPS
+
+A. Deploy the code
+1. Upload server.py, index.html, render.yaml, and .gitignore to the root of a GitHub repo.
+2. In Render, create a Blueprint using that repo and apply the render.yaml.
+3. Wait for deployment and copy the exact HTTPS URL shown by Render.
+4. Test https://YOUR-SERVICE.onrender.com/health (must return {"ok": true, ...}).
+
+B. One-time OAuth setup by site owner (not visitors)
+1. Create/register an OAuth 2.0 application in the Deriv developer dashboard.
+2. Register EXACTLY https://YOUR-SERVICE.onrender.com/callback as its redirect URL.
+3. In Render > service > Environment, add DERIV_CLIENT_ID = that OAuth app's Client ID.
+4. Optionally add DERIV_REDIRECT_URI = https://YOUR-SERVICE.onrender.com/callback.
+5. Save/redeploy, then open the public website again.
+
+C. Use
+1. Click Start Scan for the public scanner.
+2. Click Connect Deriv with OAuth; the same tab should redirect to Deriv itself and return to this site after consent.
+3. Select DEMO before testing. Execution stays disarmed by default.
+4. Only deliberately choose/arm REAL when you intend to place real-money orders.
+
+Important: Deriv may keep the user logged in on its own domain. To authorize a different Deriv identity, sign out on Deriv first, then Connect again. This site does not request account IDs, passwords, or API tokens from visitors.
+
+Live market-data handshake, OAuth and order flow still need an on-host browser test; offline source checks cannot prove Deriv's live service is reachable.
