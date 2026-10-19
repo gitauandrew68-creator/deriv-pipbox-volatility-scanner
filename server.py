@@ -446,29 +446,16 @@ class Handler(BaseHTTPRequestHandler):
                 if not INDEX.exists():
                     self.send_error(404, "index.html missing")
                     return
-                # Every normal scanner page opening starts with a clean *scanner-side*
-                # OAuth session, so the user always sees the Connect Deriv option and can
-                # authorize the account they choose. The successful OAuth callback carries
-                # oauth_callback=complete once so the just-created session is not cleared
-                # immediately when Deriv returns to the scanner.
-                keep_fresh_callback_session = params.get("oauth_callback", [""])[0] == "complete"
-                clear_session_cookie = None
-                if not keep_fresh_callback_session:
-                    sid = get_cookie(self, SESSION_COOKIE)
-                    if sid:
-                        old_session = sessions.pop(sid, None)
-                        if old_session and old_session.get("oauth_pending_id"):
-                            pending_oauth.pop(str(old_session["oauth_pending_id"]), None)
-                    _, redirect_uri, _ = load_config()
-                    secure = "; Secure" if redirect_uri.lower().startswith("https://") else ""
-                    clear_session_cookie = f"{SESSION_COOKIE}=deleted; Path=/; Max-Age=0; HttpOnly; SameSite=Lax{secure}"
+                # Keep the current scanner session across ordinary page reloads.
+                # Clearing the server-side OAuth session on every GET / left the
+                # browser showing an authorized account while /api/trade/otp returned
+                # 401 after a refresh/navigation. A deliberate account switch still
+                # starts a fresh OAuth session in login(), which revokes the old one.
                 body = INDEX.read_bytes()
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Cache-Control", "no-store")
                 self.send_header("X-Content-Type-Options", "nosniff")
-                if clear_session_cookie:
-                    self.send_header("Set-Cookie", clear_session_cookie)
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
