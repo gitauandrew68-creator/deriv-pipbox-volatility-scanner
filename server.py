@@ -181,7 +181,13 @@ def post_form(url: str, form: dict[str, str]) -> dict[str, Any]:
     req = urllib.request.Request(
         url,
         data=body,
-        headers={"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"},
+        headers={
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Accept": "application/json",
+            # Identify the legitimate server-side OAuth client in upstream logs.
+            # Do not spoof a browser or attempt to bypass provider security checks.
+            "User-Agent": "DerivPipBoxScanner/2.1 (server-side OAuth token exchange)",
+        },
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=20) as response:
