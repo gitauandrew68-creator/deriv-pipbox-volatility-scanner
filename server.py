@@ -442,6 +442,36 @@ class Handler(BaseHTTPRequestHandler):
         path, _, query = self.path.partition("?")
         params = urllib.parse.parse_qs(query)
         try:
+            if path == "/robots.txt":
+                body = (
+                    "User-agent: *\n"
+                    "Allow: /\n"
+                    "Sitemap: https://deriv-pipbox-volatility-scanner.onrender.com/sitemap.xml\n"
+                ).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Cache-Control", "public, max-age=3600")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            if path == "/sitemap.xml":
+                body = (
+                    '<?xml version="1.0" encoding="UTF-8"?>'
+                    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+                    '<url><loc>https://deriv-pipbox-volatility-scanner.onrender.com/</loc>'
+                    '<changefreq>weekly</changefreq><priority>0.8</priority></url>'
+                    '</urlset>'
+                ).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/xml; charset=utf-8")
+                self.send_header("Cache-Control", "public, max-age=3600")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             if path == "/":
                 if not INDEX.exists():
                     self.send_error(404, "index.html missing")
