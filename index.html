@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#08111e">
+<title>Deriv AI + PipBox-Style Volatility Scanner — V2.1 Stable OAuth</title>
+<style>
+:root{--bg:#08111e;--panel:#101d32;--panel2:#0b1728;--line:#263b5a;--text:#edf4ff;--muted:#95aac6;--green:#2bd39a;--yellow:#ffd166;--red:#ff6b7a;--blue:#68aaff}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 20% 0,#152b49 0,#08111e 43%,#060b13 100%);font-family:Inter,Segoe UI,Arial,sans-serif;color:var(--text)}button,select{font:inherit}button{cursor:pointer}.wrap{max-width:1540px;margin:auto;padding:22px}.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px}.brand h1{margin:0;font-size:clamp(21px,2.7vw,31px);letter-spacing:.2px}.brand p{margin:7px 0 0;color:var(--muted);line-height:1.45}.badges{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}.badge{border:1px solid var(--line);background:#0c182b;border-radius:999px;padding:8px 11px;font-size:11px;letter-spacing:.3px;color:#c8d8ec;white-space:nowrap}.badge.good{color:var(--green);border-color:#1a674d}.badge.warn{color:var(--yellow);border-color:#725d2b}.badge.bad{color:var(--red);border-color:#75404c}.layout{display:grid;grid-template-columns:minmax(0,1.16fr) minmax(0,1fr);gap:15px}.panel{background:linear-gradient(180deg,#101d32,#0c1626);border:1px solid var(--line);border-radius:15px;padding:16px;box-shadow:0 10px 34px #0003;min-width:0}.panel h2{font-size:15px;margin:0 0 13px}.controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.btn{border:1px solid #304969;background:#172a45;color:#eef6ff;padding:10px 13px;border-radius:9px;font-weight:700;font-size:13px}.btn:hover{filter:brightness(1.12)}.btn.primary{background:#1e5fc4;border-color:#4385ef}.btn.good{background:#0d5d45;border-color:#1a9e70}.btn.danger{background:#542533;border-color:#803b4b}.btn:disabled{opacity:.45;cursor:not-allowed}.status{font-size:12px;color:var(--muted);line-height:1.55;margin-top:10px}.notice{padding:10px 12px;border:1px solid #5e502b;border-radius:9px;background:#231e11;color:#ecdba8;font-size:12px;line-height:1.5;margin-top:11px}.kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:13px}.kpi{padding:11px;background:#091525;border:1px solid #1b2c46;border-radius:10px;min-width:0}.kpi .v{font-size:clamp(17px,2vw,23px);font-weight:850;overflow-wrap:anywhere}.kpi .l{font-size:10px;color:var(--muted);margin-top:5px}.predgrid{display:grid;grid-template-columns:1.08fr .92fr;gap:11px}.hero{padding:15px;border-radius:13px;background:linear-gradient(135deg,#132f53,#0b1728);border:1px solid #2a4b72;min-width:0}.hero .small{font-size:11px;color:#9fb6d7}.hero .market{font-size:14px;font-weight:800;margin-top:6px;overflow-wrap:anywhere}.hero .pick{font-size:clamp(25px,3vw,34px);font-weight:950;margin:8px 0}.hero .family{font-size:11px;color:#b3c9e7}.scoreline{display:flex;align-items:flex-end;gap:9px;margin-top:12px}.score{font-size:38px;font-weight:900;line-height:1}.meter{height:7px;border-radius:20px;background:#07111f;overflow:hidden;margin:8px 0 10px}.meter span{display:block;height:100%;background:linear-gradient(90deg,#5b8fd0,#45d7a9);width:0;transition:width .2s}.reason{margin-top:9px;font-size:11px;line-height:1.55;color:#c2d5ee;overflow-wrap:anywhere}.facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.fact{background:#091525;border:1px solid #1b2c46;border-radius:10px;padding:9px;min-width:0}.fact b{display:block;font-size:13px;overflow-wrap:anywhere}.fact span{display:block;margin-top:4px;font-size:10px;line-height:1.35;color:var(--muted)}.rowhead{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap}.rowhead h2{margin:0}.select{max-width:100%;padding:9px 11px;background:#0a1729;color:#edf4ff;border:1px solid #2c4363;border-radius:9px;font-size:12px}.marketgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.mcard{background:#091525;border:1px solid #1b2c46;border-radius:10px;padding:10px;min-width:0}.mcard .name{font-size:12px;font-weight:800;overflow-wrap:anywhere}.mcard .meta{font-size:10px;color:var(--muted);margin-top:4px;line-height:1.45;overflow-wrap:anywhere}.mcard .signal{font-size:12px;font-weight:850;margin-top:8px;overflow-wrap:anywhere}.mcard .signal.good{color:var(--green)}.mcard .signal.watch{color:var(--yellow)}.mcard .scoretag{float:right;color:#c5d9f3;font-size:10px;border:1px solid #2b4261;border-radius:6px;padding:3px 5px;margin-left:5px}.tablewrap{overflow:auto;max-height:430px;border:1px solid #1c2e49;border-radius:9px}table{border-collapse:collapse;width:100%;font-size:11px}th,td{padding:9px 10px;text-align:left;border-bottom:1px solid #1b2c46;white-space:nowrap}th{position:sticky;top:0;background:#0d1a2d;color:#a8bdd9;z-index:1}tr:last-child td{border-bottom:0}.green{color:var(--green)}.yellow{color:var(--yellow)}.red{color:var(--red)}.log{height:160px;overflow:auto;border:1px solid #182b46;border-radius:9px;padding:10px;background:#060e18;color:#a9bfd9;font:11px/1.6 Consolas,monospace}.section{margin-top:15px}.smallmuted{font-size:11px;color:var(--muted);line-height:1.5}.authline{font-size:12px;color:#b8cce6;margin-top:10px;line-height:1.5}.footer{text-align:center;font-size:10px;color:#7187a4;margin:16px 0 4px}.link{color:#8bb9ff}.hidden{display:none!important}.tradegrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:12px}.tradefield{display:flex;flex-direction:column;gap:6px;min-width:0;color:#aac0dc;font-size:11px}.tradefield input,.tradefield select{width:100%;min-width:0;padding:10px 11px;border:1px solid #2c4363;border-radius:9px;background:#091626;color:#edf4ff;font-size:13px}.tradefield small{font-size:10px;line-height:1.4;color:#8097b7}.tradeMetrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}.tradeStatus{font-size:12px;line-height:1.6;color:#bdd0e8;margin-top:10px;overflow-wrap:anywhere}.btn.real{background:#7a2433;border-color:#ba4054}.btn.trade{background:#0d5d45;border-color:#1a9e70}@media(max-width:900px){.tradegrid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:390px){.tradegrid{grid-template-columns:1fr}.tradeMetrics{grid-template-columns:1fr}}
+@media(max-width:1120px){.layout{grid-template-columns:1fr}.marketgrid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:700px){.wrap{padding:12px}.top{display:block}.badges{justify-content:flex-start;margin-top:13px}.predgrid{grid-template-columns:1fr}.marketgrid{grid-template-columns:repeat(2,minmax(0,1fr))}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi:last-child{grid-column:span 2}}
+@media(max-width:390px){.marketgrid{grid-template-columns:1fr}.controls .btn{flex:1 1 40%}}
+</style>
+</head>
+<body><div class="wrap">
+  <header class="top">
+    <div class="brand"><h1>DERIV AI + PIPBOX-STYLE SCANNER</h1><p>Live Volatility markets · shared Digit Transition Mesh · four contract families · optional Deriv account execution <span style="color:#7fd9c0;font-size:10px">· V2.1 STABLE OAUTH / OPTIONS WS</span></p></div>
+    <div class="badges"><span id="modeBadge" class="badge warn">PAPER MODE</span><span id="connBadge" class="badge">PUBLIC WS: OFFLINE</span><span id="authBadge" class="badge">DERIV: NOT CONNECTED</span><span id="tradeBadge" class="badge warn">EXECUTION: DISARMED</span></div>
+  </header>
+
+  <div class="layout">
+    <section class="panel">
+      <h2>Scanner controls</h2>
+      <div class="controls">
+        <button id="startBtn" class="btn primary">Start Scan</button><button id="stopBtn" class="btn" disabled>Stop Scan</button><button id="connectBtn" class="btn good">Connect Deriv with OAuth</button><button id="logoutBtn" class="btn danger hidden">Disconnect</button>
+      </div>
+      <div id="status" class="status">Ready. Start Scan for live public ticks. To send orders, connect Deriv, choose an account and explicitly arm execution below.</div>
+      <div id="authStatus" class="authline">Fresh OAuth is available every time you open this scanner.</div>
+      <div id="authError" class="notice hidden"></div>
+      <div class="kpis">
+        <div class="kpi"><div id="marketsKpi" class="v">0</div><div class="l">Volatility markets found</div></div>
+        <div class="kpi"><div id="qualKpi" class="v">0</div><div class="l">Qualified setups now</div></div>
+        <div class="kpi"><div id="pendingKpi" class="v">0</div><div class="l">Paper checks pending</div></div>
+        <div class="kpi"><div id="resolvedKpi" class="v">0</div><div class="l">Paper checks resolved</div></div>
+        <div class="kpi"><div id="rateKpi" class="v">—</div><div class="l">Observed paper win rate</div></div>
+      </div>
+      <div class="notice">Signals are heuristic research, not guaranteed predictions. Execution is OFF until you connect Deriv and arm it. Auto mode is optional; REAL orders use real funds.</div>
+    </section>
+
+    <section class="panel">
+      <div class="rowhead"><h2>Best current setup</h2><select id="familyFilter" class="select" aria-label="Contract family"><option value="ALL">All four families</option><option value="RF">Rise / Fall</option><option value="EO">Even / Odd</option><option value="OU">Over / Under</option><option value="MT">Matches</option></select></div>
+      <div class="predgrid"><div class="hero"><div class="small">HIGHEST-RANKED CURRENT SIGNAL</div><div id="predMarket" class="market">Waiting for market data…</div><div id="predPick" class="pick">NO EDGE</div><div id="predFamily" class="family">No qualified setup</div><div class="scoreline"><div id="predScore" class="score">—</div><div class="small" style="padding-bottom:5px">signal score / 100</div></div><div class="meter"><span id="scoreMeter"></span></div><div id="predReason" class="reason">Start scanning to collect ticks and build the transition mesh.</div></div>
+        <div class="facts"><div class="fact"><b id="predQuality">—</b><span>Research grade</span></div><div class="fact"><b id="predHorizon">—</b><span>Resolution horizon</span></div><div class="fact"><b id="predRegime">—</b><span>Price regime</span></div><div class="fact"><b id="predTrans">—</b><span>Current-digit transition</span></div><div class="fact"><b id="predRsi">—</b><span>RSI 14 reference</span></div><div class="fact"><b id="predSr">—</b><span>Micro support / resistance</span></div></div>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel section" id="tradePanel">
+    <div class="rowhead"><h2>Deriv account execution</h2><span class="smallmuted">Third-party OAuth · order execution starts disarmed</span></div>
+    <div class="notice">Connect Deriv to authorize the app on Deriv's own login page. Orders are sent to the selected Deriv Options account through its authenticated API channel; this does not open or click buttons on the Deriv website. DEMO is recommended for testing. REAL uses real money.</div>
+    <div class="tradegrid">
+      <label class="tradefield" for="tradeMode">Account type<select id="tradeMode" class="select"><option value="demo" selected>DEMO · virtual funds</option><option value="real">REAL · real funds</option></select><small>Switch deliberately; account type is verified against Deriv.</small></label>
+      <label class="tradefield" for="tradeAccount">Authorized account<select id="tradeAccount" class="select"><option value="">Connect Deriv first</option></select><small>Only accounts returned by your OAuth session appear here.</small></label>
+      <label class="tradefield" for="tradeStake">Stake per order<input id="tradeStake" type="number" min="0.35" max="1000" step="0.01" value="1.00"><small>Uses the selected account currency.</small></label>
+      <label class="tradefield" for="tradeStakeCap">Maximum stake/order<input id="tradeStakeCap" type="number" min="0.35" max="1000" step="0.01" value="1.00"><small>Orders above this cap are blocked.</small></label>
+      <label class="tradefield" for="tradeMaxOrders">Max orders this session<input id="tradeMaxOrders" type="number" min="1" max="100" step="1" value="10"><small>Execution stops when the cap is reached.</small></label>
+      <label class="tradefield" for="tradeLossLimit">Session loss stop<input id="tradeLossLimit" type="number" min="1" max="10000" step="0.01" value="5.00"><small>Stops new orders at this realized loss.</small></label>
+      <label class="tradefield" for="tradeLossStreak">Stop after consecutive losses<input id="tradeLossStreak" type="number" min="1" max="10" step="1" value="3"><small>Counts settled live contracts in this page session.</small></label>
+      <label class="tradefield" for="executionStyle">Execution style<select id="executionStyle" class="select"><option value="manual" selected>Manual · click Trade Signal</option><option value="auto">AUTO · execute qualified signals</option></select><small>Auto is not active until you arm it.</small></label>
+      <label class="tradefield hidden" id="realPhraseWrap" for="realPhrase">Real trading confirmation<input id="realPhrase" type="text" autocomplete="off" placeholder="Type TRADE REAL"><small>Required whenever REAL is selected.</small></label>
+    </div>
+    <div class="controls" style="margin-top:12px">
+      <button id="armTradeBtn" class="btn good">Connect account &amp; arm execution</button>
+      <button id="manualTradeBtn" class="btn primary" disabled>Trade current signal</button>
+      <button id="stopTradeBtn" class="btn danger" disabled>STOP NEW ORDERS</button>
+    </div>
+    <div id="tradeStatus" class="tradeStatus">Not armed. To start: Connect Deriv, select DEMO, choose an account, then press “Connect account & arm execution”.</div>
+    <div id="tradeError" class="notice hidden"></div>
+    <div class="tradeMetrics">
+      <div class="kpi"><div id="tradeOrdersCount" class="v">0</div><div class="l">Orders this page session</div></div>
+      <div class="kpi"><div id="tradeSessionPnL" class="v">0.00</div><div class="l">Settled profit/loss · account currency</div></div>
+      <div class="kpi"><div id="tradeLossStreakCount" class="v">0</div><div class="l">Consecutive losses</div></div>
+    </div>
+  </section>
+
+  <div class="layout section">
+    <section class="panel"><div class="rowhead"><h2>Live Volatility market scan</h2><span id="marketCountLabel" class="smallmuted">Waiting for active symbols…</span></div><div id="marketGrid" class="marketgrid"></div><div class="smallmuted" style="margin-top:10px">Markets are discovered from Deriv’s active-symbol response. Boom/Crash and non-Volatility index families are excluded.</div></section>
+    <section class="panel"><div class="rowhead"><h2>PipBox-style Digit Transition Mesh</h2><span class="smallmuted">Pooled observations from scanned markets</span></div><div class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-top:0"><div class="kpi"><div id="meshEdges" class="v">0</div><div class="l">Distinct edges</div></div><div class="kpi"><div id="meshTop" class="v">—</div><div class="l">Most seen transition</div></div><div class="kpi"><div id="meshConf" class="v">—</div><div class="l">Share of observed edges</div></div></div><div id="meshTable" class="tablewrap" style="margin-top:10px"></div><p class="smallmuted">The mesh measures observed past transitions. It does not reveal Deriv’s internal random-number generator or guarantee the next digit.</p></section>
+  </div>
+
+  <section class="panel section"><div class="rowhead"><h2>Latest ranked signals</h2><span id="signalCountLabel" class="smallmuted">No signals yet</span></div><div id="signalsTable" class="tablewrap"></div></section>
+  <section class="panel section"><div class="rowhead"><h2>Paper verification — no real orders</h2><span id="paperSummary" class="smallmuted">Waiting for qualifying setups</span></div><div id="paperTable" class="tablewrap"></div></section>
+  <section class="panel section"><h2>Activity log</h2><div id="log" class="log" aria-live="polite"></div></section>
+  <div class="footer">BUILD V2.1-STABLE-OAUTH-20261015 · Deriv OAuth 2.0 · public Options WebSocket only · trading requires explicit arming and account selection</div>
+</div>
+<script>
+'use strict';
+// Use only Deriv's documented public Options WebSocket for market data.
+// Do not rotate across legacy hosts after a security/handshake failure.
+// Signal selection, scoring thresholds and digit-mesh calculations are unchanged.
+const MARKET_WS_BASES = [
+  {url:'wss://api.derivws.com/trading/v1/options/ws/public', label:'Deriv public Options API', legacy:false}
+];
+let marketWsIndex = 0;
+function marketWsUrl(){ return MARKET_WS_BASES[0].url; }
+const MAX_MARKETS = 32;
+const HISTORY_COUNT = 120;
+const MIN_TICKS = 35;
+let ws = null, running = false, reqId = 1, pingTimer = null, reconnectTimer = null, reconnectAttempts = 0;
+let discovered = [], markets = new Map(), historyReqs = new Map(), pending = [], paper = [], signalLocks = new Map();
+let activeSymbolsReceived = false;
+let meshRevision=0, cachedMeshRevision=-1, cachedMeshStats=null;
+let tradeSocket=null, tradeSocketKey='', tradeReqId=5000, tradeRequests=new Map();
+let tradeArmed=false, tradeBusy=false, currentSignal=null, tradeAccounts=[];
+let tradeOrdersCount=0, tradeSessionPnL=0, tradeLossStreakCount=0;
+let closedContractIds=new Set(), autoCooldowns=new Map(), lastAutoOrderAt=0;
+let activeContracts=new Map();
+const $ = id => document.getElementById(id);
+const mean = a => a.length ? a.reduce((s,v)=>s+v,0)/a.length : 0;
+const clamp = (x,lo,hi) => Math.max(lo,Math.min(hi,x));
+const norm = s => String(s || '').replace(/\s+/g,' ').trim().toLowerCase();
+function esc(value){return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function setStatus(text){$('status').textContent = text;}
+function log(text){const el=$('log');const row=document.createElement('div');row.textContent=`${new Date().toLocaleTimeString()} — ${text}`;el.prepend(row);while(el.children.length>100)el.lastElementChild.remove();}
+function setConnection(connected){$('connBadge').textContent=connected?'PUBLIC WS: CONNECTED':'PUBLIC WS: OFFLINE';$('connBadge').className='badge '+(connected?'good':'');}
+function decimalsFor(meta, rawQuote){
+  for(const key of ['pip_size','pipSize']){
+    const value=meta?.[key];
+    if(value!==undefined && value!==null && String(value).trim()!==''){
+      const n=Number(value);
+      if(Number.isInteger(n)&&n>=0&&n<=10)return n;
+      const text=String(value);if(text.includes('.'))return text.split('.')[1].replace(/0+$/,'').length;
+    }
+  }
+  const pip=meta?.pip;
+  if(pip!==undefined&&pip!==null){const s=String(pip);if(s.includes('.'))return s.split('.')[1].replace(/0+$/,'').length;}
+  const text=String(rawQuote ?? '');if(text.includes('.'))return text.split('.')[1].length;
+  return 0;
+}
+function lastDigit(m, raw){
+  const n=Number(raw);if(!Number.isFinite(n))return null;
+  let places=Number.isInteger(m?.decimals)?m.decimals:decimalsFor(m?.meta,raw);
+  places=clamp(places,0,10);
+  const fixed=n.toFixed(places);
+  const match=fixed.match(/(\d)$/);return match?Number(match[1]):null;
+}
+function stddev(a){if(a.length<2)return 0;const m=mean(a);return Math.sqrt(mean(a.map(v=>(v-m)**2)));}
+function calcRSI(a,n=14){if(a.length<n+1)return 50;let gain=0,loss=0;for(let i=a.length-n;i<a.length;i++){const d=a[i]-a[i-1];if(d>=0)gain+=d;else loss-=d;}if(loss===0)return gain===0?50:100;return 100-(100/(1+gain/loss));}
+function priceRegime(a){if(a.length<10)return 'BUILDING';const tail=a.slice(-8),disp=tail.at(-1)-tail[0],range=Math.max(...tail)-Math.min(...tail),vol=stddev(a.slice(-15).slice(1).map((v,i)=>v-a.slice(-15)[i]));if(range===0)return 'COMPRESSION';if(Math.abs(disp)>range*.55)return disp>0?'UP TREND':'DOWN TREND';if(vol>0&&range<vol*2.5)return 'COMPRESSION';return 'CHOP';}
+function microSR(a){if(a.length<10)return 'BUILDING';const tail=a.slice(-10),high=Math.max(...tail),low=Math.min(...tail),price=tail.at(-1),range=high-low;if(range===0)return 'COMPRESSION';const position=(price-low)/range;return position>.82?'NEAR RESISTANCE':position<.18?'NEAR SUPPORT':'MID-RANGE';}
+function transitionCounts(ds, limit=180){const s=ds.slice(-limit), all=Array(10).fill(0), cond=Array.from({length:10},()=>Array(10).fill(0)), fromCount=Array(10).fill(0), edges={};for(const d of s){if(Number.isInteger(d)&&d>=0&&d<=9)all[d]++;}for(let i=1;i<s.length;i++){const from=s[i-1],to=s[i];if(!Number.isInteger(from)||!Number.isInteger(to)||from<0||from>9||to<0||to>9)continue;cond[from][to]++;fromCount[from]++;const k=`${from}→${to}`;edges[k]=(edges[k]||0)+1;}const total=all.reduce((a,b)=>a+b,0)||1;return {all,cond,fromCount,edges,base:all.map(v=>v/total)};}
+function estimateNextProbabilities(ds){const stats=transitionCounts(ds),current=ds.at(-1);if(!Number.isInteger(current))return {stats,probs:Array(10).fill(.1),n:0,current};const n=stats.fromCount[current];const probs=stats.cond[current].map((count,d)=>(count+2*stats.base[d])/(n+2));return {stats,probs,n,current};}
+// Shared mesh used by both the visible table and Matches. Each market contributes
+// only its latest bounded digit history; the current final digit has no future tick
+// included, so the predicted destination is always an unseen next tick.
+function pooledMeshStats(limit=180){
+  if(cachedMeshStats&&cachedMeshRevision===meshRevision)return cachedMeshStats;
+  const cond=Array.from({length:10},()=>Array(10).fill(0));
+  const fromCount=Array(10).fill(0),destinationCount=Array(10).fill(0),edges={};
+  let total=0;
+  for(const m of markets.values()){
+    const ds=m.digits.filter(d=>Number.isInteger(d)&&d>=0&&d<=9).slice(-limit);
+    for(let i=1;i<ds.length;i++){
+      const from=ds[i-1],to=ds[i],key=`${from}→${to}`;
+      cond[from][to]++;fromCount[from]++;destinationCount[to]++;edges[key]=(edges[key]||0)+1;total++;
+    }
+  }
+  const base=destinationCount.map(n=>n/(total||1));
+  cachedMeshStats={cond,fromCount,destinationCount,edges,total,base};cachedMeshRevision=meshRevision;
+  return cachedMeshStats;
+}
+function meshNextProbabilities(current,mesh=pooledMeshStats()){
+  const n=Number.isInteger(current)?mesh.fromCount[current]||0:0;
+  const probs=Array.from({length:10},(_,d)=>(Number.isInteger(current)?mesh.cond[current][d]:0)+2*(mesh.base[d]||.1));
+  const denom=n+2;
+  return {n,probs:probs.map(p=>p/denom),counts:Number.isInteger(current)?mesh.cond[current]:Array(10).fill(0),mesh};
+}
+function signalForFamily(m,family){
+  const a=m.prices, ds=m.digits.filter(Number.isInteger);
+  if(a.length<MIN_TICKS||ds.length<MIN_TICKS)return {pick:'NO EDGE',family,score:0,quality:'BUILDING',horizon:0,reasons:['Collecting sufficient tick history.'],eligible:false};
+  const {stats,probs,n,current}=estimateNextProbabilities(ds);
+  const rsi=calcRSI(a),reg=priceRegime(a),sr=microSR(a),tr=Object.entries(stats.edges).sort((x,y)=>y[1]-x[1]);
+  const tail=a.slice(-13),diffs=tail.slice(1).map((v,i)=>v-tail[i]);
+  const vol=stddev(diffs)||1e-12;
+  const momentum=diffs.slice(-5).reduce((sum,v)=>sum+v,0);
+  const z=momentum/(vol*Math.sqrt(5));
+  let rise=clamp(50+z*10,32,80),fall=clamp(50-z*10,32,80);
+  if(reg==='UP TREND'){rise+=5;fall-=3;}if(reg==='DOWN TREND'){fall+=5;rise-=3;}
+  if(sr==='NEAR RESISTANCE')rise-=4;if(sr==='NEAR SUPPORT')fall-=4;
+  if(rsi>72)rise-=5;if(rsi<28)fall-=5;
+  rise=Math.round(clamp(rise,30,85));fall=Math.round(clamp(fall,30,85));
+  const cand=[];
+  cand.push({pick:'RISE',family:'RF',score:rise,horizon:5,edge:(rise-50)/100,n,transition:tr[0]?.[0]||'—',reasons:[`${reg} price regime`,`5-tick normalized momentum ${z.toFixed(2)}`,`RSI ${rsi.toFixed(1)}`,sr],eligible:rise>=62&&rise-fall>=7});
+  cand.push({pick:'FALL',family:'RF',score:fall,horizon:5,edge:(fall-50)/100,n,transition:tr[0]?.[0]||'—',reasons:[`${reg} price regime`,`5-tick normalized momentum ${z.toFixed(2)}`,`RSI ${rsi.toFixed(1)}`,sr],eligible:fall>=62&&fall-rise>=7});
+  const pEven=probs.reduce((s,p,d)=>s+(d%2===0?p:0),0),relParity=n/(n+8),pEvenAdj=.5+(pEven-.5)*relParity;
+  const evenScore=Math.round(clamp(50+(pEvenAdj-.5)*150,35,85)),oddScore=Math.round(clamp(50+(.5-pEvenAdj)*150,35,85));
+  cand.push({pick:'EVEN',family:'EO',score:evenScore,horizon:1,edge:pEvenAdj-.5,n,transition:tr[0]?.[0]||'—',reasons:[`Current digit ${current}`,`${n} observed transitions from digit ${current}`,`Estimated next-digit even share ${(pEvenAdj*100).toFixed(1)}%`],eligible:evenScore>=62&&n>=6&&pEvenAdj>.5});
+  cand.push({pick:'ODD',family:'EO',score:oddScore,horizon:1,edge:.5-pEvenAdj,n,transition:tr[0]?.[0]||'—',reasons:[`Current digit ${current}`,`${n} observed transitions from digit ${current}`,`Estimated next-digit odd share ${((1-pEvenAdj)*100).toFixed(1)}%`],eligible:oddScore>=62&&n>=6&&pEvenAdj<.5});
+  // Compare threshold contracts against their own uniform-digit baseline so Over 1 / Under 8 don't win merely because they are broader contracts.
+  let bestOU=null;
+  for(let barrier=1;barrier<=4;barrier++){
+    const p=probs.reduce((s,prob,d)=>s+(d>barrier?prob:0),0),baseline=(9-barrier)/10;
+    const edge=p-baseline,score=Math.round(clamp(50+edge*260*(n/(n+6)),35,86));
+    const c={pick:`OVER ${barrier}`,family:'OU',score,horizon:1,edge,n,transition:tr[0]?.[0]||'—',reasons:[`Over barrier ${barrier}: next digit must be greater than ${barrier}`,`${n} transitions from current digit ${current}`,`Estimated hit rate ${(p*100).toFixed(1)}%; uniform baseline ${(baseline*100).toFixed(0)}%`],eligible:score>=61&&edge>.025&&n>=6};
+    if(!bestOU||c.score>bestOU.score)bestOU=c;
+  }
+  for(let barrier=5;barrier<=8;barrier++){
+    const p=probs.reduce((s,prob,d)=>s+(d<barrier?prob:0),0),baseline=barrier/10;
+    const edge=p-baseline,score=Math.round(clamp(50+edge*260*(n/(n+6)),35,86));
+    const c={pick:`UNDER ${barrier}`,family:'OU',score,horizon:1,edge,n,transition:tr[0]?.[0]||'—',reasons:[`Under barrier ${barrier}: next digit must be less than ${barrier}`,`${n} transitions from current digit ${current}`,`Estimated hit rate ${(p*100).toFixed(1)}%; uniform baseline ${(baseline*100).toFixed(0)}%`],eligible:score>=61&&edge>.025&&n>=6};
+    if(!bestOU||c.score>bestOU.score)bestOU=c;
+  }
+  if(bestOU)cand.push(bestOU);
+  // MATCHES now reads the exact same pooled Digit Transition Mesh rendered below.
+  // It conditions the pooled mesh on this market's current last digit, then ranks
+  // destination digits from the observed outgoing edges for that source digit.
+  const pooledMesh=pooledMeshStats();
+  const meshEstimate=meshNextProbabilities(current,pooledMesh);
+  const meshN=meshEstimate.n,meshProbs=meshEstimate.probs,meshCounts=meshEstimate.counts;
+  const rankedDigits=meshProbs.map((p,d)=>({d,p,count:meshCounts[d]||0})).sort((a,b)=>b.p-a.p);
+  const meshTop=rankedDigits[0],meshSecond=rankedDigits[1];
+  let matches=null;
+  for(const item of rankedDigits){
+    const p=item.p,rel=meshN/(meshN+25),gap=p-(meshSecond?.p||.1);
+    const score=Math.round(clamp(50+(p-.1)*240*rel,30,88));
+    const directExpected=meshN*.1;
+    const eligible=meshN>=25&&item.count>=Math.ceil(directExpected)+2&&p>=.135&&gap>=.01&&score>=62;
+    const c={pick:`MATCHES ${item.d}`,family:'MT',score,horizon:1,edge:p-.1,n:meshN,transition:`${current}→${item.d}`,reasons:[`Shared mesh path: ${current}→${item.d}`,`${item.count} pooled direct transitions from digit ${current} across scanned volatility markets`,`Smoothed mesh destination share ${(p*100).toFixed(1)}% vs 10% baseline; lead over runner-up ${(gap*100).toFixed(1)} percentage points`],eligible};
+    if(!matches||c.score>matches.score)matches=c;
+  }
+  if(matches)cand.push(matches);
+  const eligibleFamily=cand.filter(c=>c.eligible);
+  const allBest=(eligibleFamily.length?eligibleFamily:cand).sort((x,y)=>y.score-x.score)[0];
+  const familyBest=family==='ALL'?allBest:cand.filter(c=>c.family===family).sort((x,y)=>y.score-x.score)[0];
+  const best=familyBest||allBest;
+  const eligible=Boolean(best?.eligible);
+  const quality=eligible?(best.score>=76?'A':'B'):(best.score>=55?'WATCH':'NO EDGE');
+  return {...best,quality,eligible,rsi,reg,sr,transition:best?.transition||tr[0]?.[0]||'—',reasons:best?.reasons||[],candidates:cand,dsCount:ds.length};
+}
+function signalForMarket(m){return signalForFamily(m,$('familyFilter').value);}
+function renderMarkets(){
+  const total=markets.size,live=[...markets.values()].filter(m=>m.connected).length;
+  $('marketsKpi').textContent=String(total);$('marketCountLabel').textContent=`${live}/${total} markets live`;
+  if(!total){$('marketGrid').innerHTML='<div class="smallmuted">No markets discovered yet. Start Scan and wait for the active-symbol response.</div>';return;}
+  $('marketGrid').innerHTML=[...markets.values()].map(m=>{
+    const s=signalForMarket(m),state=m.error?'DATA ERROR':m.connected?'LIVE':'LOADING';
+    const cls=s.eligible?'good':'watch';const label=s.quality==='BUILDING'?'BUILDING':s.eligible?s.pick:`${s.pick==='NO EDGE'?'NO EDGE':'WATCH · '+s.pick}`;
+    return `<div class="mcard"><span class="scoretag">${Number.isFinite(s.score)?s.score:'—'}</span><div class="name">${esc(m.name)}</div><div class="meta">${esc(m.symbol)} · ${m.prices.length} ticks · ${state}</div><div class="signal ${cls}">${esc(label)}</div><div class="meta">${esc(s.quality)} · ${s.horizon||'—'} tick${s.horizon===1?'':'s'}</div></div>`;
+  }).join('');
+}
+function renderPrediction(){
+  const ranked=[...markets.values()].map(m=>({m,s:signalForMarket(m)})).filter(x=>x.s.eligible&&x.s.pick!=='NO EDGE').sort((a,b)=>b.s.score-a.s.score);
+  $('qualKpi').textContent=String(ranked.length);
+  const item=ranked[0];
+  if(!item){
+    currentSignal=null;$('manualTradeBtn').disabled=true;
+    const anyMarketData=[...markets.values()].some(m=>m.prices.length>=MIN_TICKS);
+    const noSymbols=!activeSymbolsReceived;
+    $('predMarket').textContent=noSymbols?'Waiting for live market data':(discovered.length?'Collecting tick history':'No eligible Volatility markets returned');
+    $('predPick').textContent=!activeSymbolsReceived||!anyMarketData?'NO MARKET DATA':'NO EDGE';
+    $('predFamily').textContent=!activeSymbolsReceived?'Connection not established':(!anyMarketData?'Building market observations':'Wait for more observations');
+    $('predScore').textContent='—';$('scoreMeter').style.width='0';$('predQuality').textContent='—';$('predHorizon').textContent='—';$('predRegime').textContent='—';$('predTrans').textContent='—';$('predRsi').textContent='—';$('predSr').textContent='—';
+    $('predReason').textContent=!activeSymbolsReceived?'No active-symbol response has arrived. This is a connection/data state, not a signal assessment.':(!anyMarketData?'Market symbols were received, but enough tick history has not arrived to evaluate signals.':'No candidate cleared the current research gate. This is preferable to forcing a signal.');return;
+  }
+  const {m,s}=item;currentSignal={symbol:m.symbol,market:m.name,family:s.family,pick:s.pick,horizon:s.horizon,score:s.score,eligible:Boolean(s.eligible),transition:s.transition||'—',entryPrice:m.prices.at(-1),entryDigit:m.digits.at(-1),tickIndex:m.prices.length-1};$('manualTradeBtn').disabled=!(tradeArmed&&currentSignal.eligible&&!tradeBusy);$('predMarket').textContent=m.name;$('predPick').textContent=s.pick;$('predFamily').textContent=`${familyName(s.family)} · ${s.horizon}-tick verification horizon`;$('predScore').textContent=String(s.score);$('scoreMeter').style.width=`${clamp(s.score,0,100)}%`;$('predQuality').textContent=s.quality;$('predHorizon').textContent=s.horizon===5?'5 exact ticks':'1 exact tick';$('predRegime').textContent=s.reg||'—';$('predTrans').textContent=s.transition||'—';$('predRsi').textContent=Number.isFinite(s.rsi)?s.rsi.toFixed(1):'—';$('predSr').textContent=s.sr||'—';$('predReason').textContent=s.reasons.join(' · ');
+}
+function familyName(f){return ({RF:'Rise / Fall',EO:'Even / Odd',OU:'Over / Under',MT:'Matches'})[f]||f;}
+function renderMesh(){
+  const mesh=pooledMeshStats(),count=mesh.total,pooled=mesh.edges;
+  const rows=Object.entries(pooled).sort((a,b)=>b[1]-a[1]).slice(0,12),distinct=Object.keys(pooled).length;
+  $('meshEdges').textContent=String(distinct);$('meshTop').textContent=rows[0]?.[0]||'—';$('meshConf').textContent=rows[0]&&count?`${(rows[0][1]/count*100).toFixed(1)}%`:'—';
+  $('meshTable').innerHTML=rows.length?`<table><thead><tr><th>Digit transition</th><th>Count</th><th>Share of pooled edges</th></tr></thead><tbody>${rows.map(([edge,n])=>`<tr><td><b>${esc(edge)}</b></td><td>${n}</td><td>${count?(n/count*100).toFixed(2):'0.00'}%</td></tr>`).join('')}</tbody></table>`:'<div class="smallmuted" style="padding:10px">Mesh will fill after tick history arrives.</div>';
+}
+function renderSignals(){
+  const rows=[...markets.values()].map(m=>({m,s:signalForMarket(m)})).filter(x=>x.s.pick!=='NO EDGE'&&x.s.quality!=='BUILDING').sort((a,b)=>b.s.score-a.s.score).slice(0,40);
+  $('signalCountLabel').textContent=`${rows.filter(x=>x.s.eligible).length} qualified · ${rows.length} ranked/watch signals`;
+  $('signalsTable').innerHTML=rows.length?`<table><thead><tr><th>Market</th><th>Contract</th><th>Family</th><th>Score</th><th>Grade</th><th>Sample transitions</th><th>Reason / edge</th></tr></thead><tbody>${rows.map(({m,s})=>`<tr><td>${esc(m.name)}</td><td><b>${esc(s.pick)}</b></td><td>${familyName(s.family)}</td><td>${s.score}</td><td class="${s.eligible?'green':'yellow'}">${s.quality}</td><td>${s.n||0}</td><td>${esc((s.reasons||[]).slice(0,2).join('; '))}</td></tr>`).join('')}</tbody></table>`:'<div class="smallmuted" style="padding:10px">Waiting for enough data to rank setups.</div>';
+}
+function renderPaper(){
+  const wins=paper.filter(x=>x.result==='WIN').length,losses=paper.filter(x=>x.result==='LOSS').length,total=wins+losses;
+  $('pendingKpi').textContent=String(pending.length);$('resolvedKpi').textContent=String(total);$('rateKpi').textContent=total?`${(wins/total*100).toFixed(1)}%`:'—';
+  $('paperSummary').textContent=`${wins} wins · ${losses} losses · ${pending.length} unresolved · ${total?`${(wins/total*100).toFixed(1)}% observed win rate`:'no resolved sample yet'}`;
+  const rows=paper.slice(-100).reverse();
+  $('paperTable').innerHTML=rows.length?`<table><thead><tr><th>Time</th><th>Market</th><th>Family</th><th>Pick</th><th>Entry price</th><th>Exit price</th><th>Result</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.time)}</td><td>${esc(x.market)}</td><td>${familyName(x.family)}</td><td><b>${esc(x.pick)}</b></td><td>${esc(x.entryPriceText)}</td><td>${esc(x.exitPriceText)}</td><td class="${x.result==='WIN'?'green':'red'}"><b>${x.result}</b></td></tr>`).join('')}</tbody></table>`:'<div class="smallmuted" style="padding:10px">Paper results will appear after a qualified signal reaches its exact tick horizon.</div>';
+}
+function renderAll(){renderMarkets();renderPrediction();renderMesh();renderSignals();renderPaper();}
+function maybeSchedulePaper(m,s){
+  if(!running||!s.eligible||s.pick==='NO EDGE')return;
+  const entryIndex=m.prices.length-1,key=`${m.symbol}|${s.family}`;
+  const nextAllowed=signalLocks.get(key)||-1;if(entryIndex<nextAllowed)return;
+  // Lock until the forecast horizon plus a small cool-down to avoid repeated overlapping samples.
+  signalLocks.set(key,entryIndex+s.horizon+4);
+  pending.push({symbol:m.symbol,market:m.name,family:s.family,pick:s.pick,horizon:s.horizon,entryIndex,targetIndex:entryIndex+s.horizon,entryPrice:m.prices[entryIndex],entryPriceText:m.quoteTexts.at(-1)||String(m.prices[entryIndex]),entryDigit:m.digits.at(-1),barrier:Number(s.pick.split(' ').at(-1)),created:Date.now()});
+  renderPaper();
+}
+function resolvesPosition(pos,m){
+  const i=pos.targetIndex,exit=m.prices[i],digit=m.digits[i];if(!Number.isFinite(exit)||!Number.isInteger(digit))return null;
+  let win=false;
+  if(pos.family==='RF')win=pos.pick==='RISE'?exit>pos.entryPrice:exit<pos.entryPrice;
+  else if(pos.family==='EO')win=(digit%2===0)===(pos.pick==='EVEN');
+  else if(pos.family==='MT')win=digit===pos.barrier;
+  else if(pos.family==='OU')win=pos.pick.startsWith('OVER')?digit>pos.barrier:digit<pos.barrier;
+  return {time:new Date().toLocaleTimeString(),market:pos.market,symbol:pos.symbol,family:pos.family,pick:pos.pick,entryPriceText:pos.entryPriceText,exitPriceText:m.quoteTexts[i]||String(exit),result:win?'WIN':'LOSS',horizon:pos.horizon};
+}
+function resolvePending(m){
+  const still=[];
+  for(const pos of pending){if(pos.symbol!==m.symbol||m.prices.length-1<pos.targetIndex){still.push(pos);continue;}const resolved=resolvesPosition(pos,m);if(resolved){paper.push(resolved);log(`Paper ${resolved.result}: ${resolved.market} ${resolved.pick} after ${resolved.horizon} tick(s).`);}else{still.push(pos);}}
+  pending=still;if(paper.length>500)paper=paper.slice(-500);renderPaper();
+}
+function publicErrorMessage(d){return d?.error?.message||d?.errors?.[0]?.message||d?.message||'Unknown Deriv API error';}
+function requestHistory(symbol,attempt=0){if(!ws||ws.readyState!==WebSocket.OPEN)return;const id=reqId++;historyReqs.set(id,{symbol,attempt});ws.send(JSON.stringify({ticks_history:symbol,count:HISTORY_COUNT,end:'latest',style:'ticks',req_id:id}));}
+function isVolatilityMarket(item){
+  const symbol=String(item.underlying_symbol||item.symbol||'').trim();
+  const name=String(item.display_name||item.underlying_symbol_name||item.name||symbol).trim();
+  if(!symbol||/(boom|crash)/i.test(name+' '+symbol))return false;
+  return /volatility/i.test(name)||/^R_\d+$/i.test(symbol)||/^1HZ\d+V$/i.test(symbol);
+}
+function marketSort(a,b){const rank=s=>s.startsWith('R_')?0:s.startsWith('1HZ')?1:2;return rank(a.symbol)-rank(b.symbol)||a.symbol.localeCompare(b.symbol,undefined,{numeric:true});}
+function acceptActiveSymbols(items){
+  const eligible=(items||[]).filter(isVolatilityMarket).map(x=>{const symbol=String(x.underlying_symbol||x.symbol||'').trim(),name=String(x.display_name||x.underlying_symbol_name||x.name||symbol).trim();return {symbol,name,meta:x};}).filter(x=>x.symbol);
+  const uniq=new Map();for(const item of eligible)if(!uniq.has(item.symbol))uniq.set(item.symbol,item);
+  discovered=[...uniq.values()].sort(marketSort).slice(0,MAX_MARKETS);
+  if(!discovered.length){setStatus('Deriv responded, but no matching Volatility active symbols were recognized. Check Activity log/API schema.');log('Active-symbol response had no recognized Volatility markets.');return;}
+  discovered.forEach(item=>{
+    let m=markets.get(item.symbol);
+    if(!m)m={symbol:item.symbol,name:item.name,meta:item.meta,decimals:decimalsFor(item.meta,''),prices:[],digits:[],quoteTexts:[],raw:[],connected:false,error:false};
+    m.name=item.name;m.meta=item.meta;m.decimals=decimalsFor(item.meta,m.quoteTexts.at(-1)||'');markets.set(item.symbol,m);
+  });
+  activeSymbolsReceived=true;meshRevision++;
+  setStatus(`Discovered ${discovered.length} active Volatility markets. Loading recent tick history, then subscribing to live ticks…`);
+  log(`Deriv active_symbols returned ${discovered.length} eligible Volatility markets.`);
+  discovered.forEach((item,i)=>setTimeout(()=>requestHistory(item.symbol),i*180));
+  renderAll();
+}
+function onHistory(d,request){
+  const symbol=d.echo_req?.ticks_history||d.echo_req?.ticks||request?.symbol;
+  const m=markets.get(symbol);if(!m)return;
+  const history=d.history||d.data?.history;
+  const prices=history?.prices||[];const times=history?.times||[];
+  if(!Array.isArray(prices)||prices.length===0){m.error=true;m.connected=false;log(`No tick history returned for ${symbol}.`);renderMarkets();return;}
+  m.prices=prices.map(Number).filter(Number.isFinite);
+  m.quoteTexts=prices.map(v=>String(v));
+  m.digits=m.prices.map((p,i)=>lastDigit(m,m.quoteTexts[i]));
+  m.raw=m.prices.map((p,i)=>({t:times[i]||null,p}));
+  m.decimals=decimalsFor(m.meta,m.quoteTexts.at(-1));m.connected=true;m.error=false;meshRevision++;
+  // Subscribe to the live stream only after history is loaded.
+  ws?.send(JSON.stringify({ticks:symbol,subscribe:1,req_id:reqId++}));
+  renderAll();
+}
+function onTick(d){
+  const q=d.tick||d.data?.tick;if(!q)return;
+  const symbol=String(q.symbol||q.underlying_symbol||d.echo_req?.ticks||'');const raw=q.quote;
+  if(!symbol||raw===undefined||raw===null)return;
+  const m=markets.get(symbol);if(!m)return;
+  const price=Number(raw);if(!Number.isFinite(price))return;
+  const quoteText=String(raw);m.decimals=decimalsFor(m.meta,quoteText);m.prices.push(price);m.quoteTexts.push(quoteText);m.digits.push(lastDigit(m,quoteText));m.raw.push({t:q.epoch||null,p:price});
+  while(m.prices.length>500){m.prices.shift();m.quoteTexts.shift();m.digits.shift();m.raw.shift();for(const p of pending)if(p.symbol===symbol){p.entryIndex--;p.targetIndex--;}}
+  m.connected=true;m.error=false;meshRevision++;
+  resolvePending(m);
+  if(running){const signal=signalForMarket(m);maybeSchedulePaper(m,signal);}
+  renderAll();
+  maybeAutoExecute(symbol);
+}
+function connectPublic(){
+  if(ws&&(ws.readyState===WebSocket.OPEN||ws.readyState===WebSocket.CONNECTING))return;
+  activeSymbolsReceived=false;setConnection(false);log('Opening Deriv public market-data WebSocket…');
+  try{ws=new WebSocket(marketWsUrl());}catch(err){setStatus(`Could not create WebSocket: ${err.message}`);log(`WebSocket setup failed: ${err.message}`);return;}
+  ws.onopen=()=>{reconnectAttempts=0;setConnection(true);log(`Connected to ${MARKET_WS_BASES[marketWsIndex].label}${MARKET_WS_BASES[marketWsIndex].legacy?` (App ID ${PUBLIC_APP_ID})`:''}.`);setStatus('Connected. Requesting the current active-symbol list…');const activeReq={active_symbols:'brief',req_id:reqId++};ws.send(JSON.stringify(activeReq));clearInterval(pingTimer);pingTimer=setInterval(()=>{if(ws?.readyState===WebSocket.OPEN)ws.send(JSON.stringify({ping:1,req_id:reqId++}));},25000);};
+  ws.onmessage=event=>{
+    let d;try{d=JSON.parse(event.data);}catch{log('Received a non-JSON WebSocket frame.');return;}
+    const msgType=d.msg_type||d.type||d.data?.msg_type;
+    if(d.error||d.errors?.length){const err=publicErrorMessage(d),req=historyReqs.get(d.req_id);if(req){historyReqs.delete(d.req_id);const m=markets.get(req.symbol);if(req.attempt<1&&running){log(`History request retry for ${req.symbol}: ${err}`);setTimeout(()=>requestHistory(req.symbol,req.attempt+1),900);}else{if(m){m.error=true;m.connected=false;}log(`History error ${req.symbol}: ${err}`);}renderAll();}else{log(`Deriv API error: ${err}`);if(/validation|invalid request/i.test(err))setStatus(`Deriv rejected a public request: ${err}. This is an API schema issue, not an authentication result.`);}return;}
+    if(msgType==='active_symbols'||d.active_symbols){acceptActiveSymbols(d.active_symbols||d.data?.active_symbols||[]);return;}
+    if(msgType==='history'||d.history){const req=historyReqs.get(d.req_id);historyReqs.delete(d.req_id);onHistory(d,req);return;}
+    if(msgType==='tick'||d.tick){onTick(d);return;}
+    if(msgType==='ping')return;
+  };
+  ws.onerror=()=>{log(`Market-data WebSocket handshake failed on ${MARKET_WS_BASES[0].label}. The browser hides handshake details. No alternate legacy host will be tried automatically.`);};
+  ws.onclose=()=>{
+    setConnection(false);clearInterval(pingTimer);historyReqs.clear();log('Public WebSocket closed.');
+    if(running){
+      reconnectAttempts++;
+      running=false;$('startBtn').disabled=false;$('stopBtn').disabled=true;clearTimeout(reconnectTimer);clearInterval(pingTimer);
+      setStatus('Public market-data connection failed or closed. Automatic reconnect is intentionally disabled after a failed connection to avoid repeated requests. Check Deriv access/support first, then press Start Scan once.');
+      log('Automatic reconnect is intentionally disabled after this failed/closed connection. If Deriv shows a security block, stop and contact Deriv Support with its Ray ID.');
+      disarmTrading('Market-data connection failed; new orders are disarmed.');return;
+    }else if(!$('status').textContent.includes('stopped'))setStatus('Public WebSocket closed. Press Start Scan to reconnect only after checking Deriv access.');
+  };
+}
+function startScan(){
+  if(running)return;reconnectAttempts=0;running=true;$('startBtn').disabled=true;$('stopBtn').disabled=false;if(!tradeArmed){$('modeBadge').textContent='PAPER SCANNER';$('modeBadge').className='badge warn';}setStatus('Starting public market scan. Account orders remain disarmed unless you explicitly arm them below.');log('Public scanner started. Trading remains disarmed until explicit account arming.');connectPublic();
+}
+function stopScan(){
+  running=false;$('startBtn').disabled=false;$('stopBtn').disabled=true;clearTimeout(reconnectTimer);clearInterval(pingTimer);historyReqs.clear();
+  const dropped=pending.length;pending=[];if(ws){const old=ws;ws=null;try{old.close();}catch{}}
+  disarmTrading('Scanner stopped; new orders are paused.');
+  setConnection(false);setStatus(`Scanner stopped. ${dropped} unresolved paper check(s) were cancelled and not counted.`);if(dropped)log(`Cancelled ${dropped} unresolved paper check(s); they were not counted as wins or losses.`);log('Scanner stopped.');renderPaper();
+}
+function setTradeStatus(text){$('tradeStatus').textContent=text;}
+function showTradeError(text){$('tradeError').textContent=text;$('tradeError').classList.remove('hidden');}
+function clearTradeError(){$('tradeError').textContent='';$('tradeError').classList.add('hidden');}
+function tradeMode(){return $('tradeMode').value==='real'?'real':'demo';}
+function selectedTradeAccount(){const id=$('tradeAccount').value;return tradeAccounts.find(a=>String(a.account_id)===String(id))||null;}
+function renderTradeAccounts(){
+  const sel=$('tradeAccount');if(!sel)return;const mode=tradeMode(),old=sel.value;
+  const rows=tradeAccounts.filter(a=>String(a.account_type||'').toLowerCase()===mode&&a.account_id);
+  sel.innerHTML='';
+  if(!rows.length){const opt=document.createElement('option');opt.value='';opt.textContent=tradeAccounts.length?`No ${mode.toUpperCase()} Options account returned`: 'Connect Deriv first';sel.appendChild(opt);sel.disabled=true;}
+  else{for(const a of rows){const opt=document.createElement('option');opt.value=String(a.account_id);opt.textContent=`${a.loginid||a.account_id} · ${String(a.currency||'USD').toUpperCase()} · ${mode.toUpperCase()}`;sel.appendChild(opt);}sel.disabled=false;if(rows.some(a=>String(a.account_id)===old))sel.value=old;}
+  if($('realPhraseWrap'))$('realPhraseWrap').classList.toggle('hidden',mode!=='real');
+  updateTradeButtons();
+}
+function updateTradeButtons(){
+  // A UI helper was referenced by renderTradeAccounts but missing from the file.
+  // Keep buttons in sync without changing signal ranking/scoring or arming safeguards.
+  const arm=$('armTradeBtn'), stop=$('stopTradeBtn'), manual=$('manualTradeBtn');
+  if(arm)arm.disabled=tradeBusy;
+  if(stop)stop.disabled=!tradeArmed;
+  if(manual)manual.disabled=!(tradeArmed&&currentSignal&&currentSignal.eligible&&!tradeBusy&&$('executionStyle').value==='manual');
+}
+function updateTradeMetrics(){
+  $('tradeOrdersCount').textContent=String(tradeOrdersCount);
+  $('tradeSessionPnL').textContent=tradeSessionPnL.toFixed(2);
+  $('tradeSessionPnL').className='v '+(tradeSessionPnL>0?'green':tradeSessionPnL<0?'red':'');
+  $('tradeLossStreakCount').textContent=String(tradeLossStreakCount);
+  $('tradeBadge').textContent=tradeArmed?`EXECUTION: ${tradeMode().toUpperCase()} ARMED`:'EXECUTION: DISARMED';
+  $('tradeBadge').className='badge '+(tradeArmed?(tradeMode()==='real'?'bad':'good'):'warn');
+  $('armTradeBtn').disabled=tradeBusy;
+  $('stopTradeBtn').disabled=!tradeArmed;
+  $('manualTradeBtn').disabled=!(tradeArmed&&currentSignal&&currentSignal.eligible&&!tradeBusy&&$('executionStyle').value==='manual');
+}
+function disarmTrading(reason='Execution disarmed.'){
+  tradeArmed=false;$('modeBadge').textContent='PAPER SCANNER';$('modeBadge').className='badge warn';
+  updateTradeMetrics();setTradeStatus(reason);log(reason);
+  // Keep the account WebSocket open to continue receiving status for already-bought contracts.
+}
+function apiError(payload){return payload?.error||payload?.errors?.[0]?.message||payload?.detail||'Unknown Deriv API error';}
+function tradeCall(payload, timeoutMs=15000){
+  return new Promise((resolve,reject)=>{
+    if(!tradeSocket||tradeSocket.readyState!==WebSocket.OPEN){reject(new Error('Authenticated Deriv trading connection is not open. Re-arm execution.'));return;}
+    const req_id=tradeReqId++,request={...payload,req_id};
+    const timer=setTimeout(()=>{tradeRequests.delete(req_id);reject(new Error('Deriv response timed out; no retry was sent automatically. Check account transactions before repeating a manual order.'));},timeoutMs);
+    tradeRequests.set(req_id,{resolve,reject,timer});
+    try{tradeSocket.send(JSON.stringify(request));}catch(err){clearTimeout(timer);tradeRequests.delete(req_id);reject(err);}
+  });
+}
+async function ensureTradeSocket(){
+  const account=selectedTradeAccount(),mode=tradeMode();
+  if(!account)throw new Error(`No authorized ${mode.toUpperCase()} Options account selected. Connect Deriv and refresh accounts first.`);
+  if(String(account.account_type).toLowerCase()!==mode)throw new Error('The selected account type does not match the chosen account mode.');
+  const key=`${mode}:${account.account_id}`;
+  if(tradeSocket&&tradeSocket.readyState===WebSocket.OPEN&&tradeSocketKey===key)return;
+  if(tradeSocket){try{tradeSocket.close();}catch{}tradeSocket=null;}
+  tradeSocketKey='';
+  if(location.protocol==='file:')throw new Error('Open the hosted HTTPS site, not the downloaded HTML file.');
+  const response=await fetch(new URL('/api/trade/otp',location.origin),{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',body:JSON.stringify({mode,account_id:account.account_id})});
+  const payload=await response.json().catch(()=>({error:`Trade connection endpoint returned HTTP ${response.status}`}));
+  if(!response.ok||!payload.ok||!payload.ws_url)throw new Error(apiError(payload));
+  // The one-use URL contains a short-lived OTP. Do not write it to the UI or logs.
+  await new Promise((resolve,reject)=>{
+    let settled=false;const socket=new WebSocket(payload.ws_url);tradeSocket=socket;tradeSocketKey=key;
+    const timer=setTimeout(()=>{if(!settled){settled=true;try{socket.close();}catch{}reject(new Error('Timed out connecting to Deriv trading channel.'))}},15000);
+    socket.onopen=()=>{if(settled)return;settled=true;clearTimeout(timer);resolve();};
+    socket.onerror=()=>{if(!settled){settled=true;clearTimeout(timer);reject(new Error('Deriv trading WebSocket failed to open. Verify OAuth permissions and account access.'));}};
+    socket.onmessage=event=>handleTradeMessage(socket,event);
+    socket.onclose=()=>{
+      if(!settled){settled=true;clearTimeout(timer);reject(new Error('Deriv closed the trading connection before it became ready.'));}
+      if(tradeSocket===socket){tradeSocket=null;tradeSocketKey='';if(tradeArmed)disarmTrading('Deriv trading connection closed. New orders are paused; connect and arm again.');}
+    };
+  });
+  setTradeStatus(`Authorized ${mode.toUpperCase()} trading channel connected for ${account.loginid||account.account_id}.`);
+  log(`Authenticated ${mode.toUpperCase()} Deriv trading channel connected for ${account.loginid||account.account_id}.`);
+}
+function handleTradeMessage(socket,event){
+  let d;try{d=JSON.parse(event.data);}catch{return;}
+  const type=d.msg_type||d.type||d.data?.msg_type,reqIdValue=d.req_id;
+  if(d.error||d.errors?.length){const message=apiError(d);if(reqIdValue&&tradeRequests.has(reqIdValue)){const pendingReq=tradeRequests.get(reqIdValue);clearTimeout(pendingReq.timer);tradeRequests.delete(reqIdValue);pendingReq.reject(new Error(message));}else log(`Deriv trading update: ${message}`);return;}
+  if(reqIdValue&&tradeRequests.has(reqIdValue)){const pendingReq=tradeRequests.get(reqIdValue);clearTimeout(pendingReq.timer);tradeRequests.delete(reqIdValue);pendingReq.resolve(d);}
+  if(type==='proposal_open_contract'||d.proposal_open_contract)handleContractUpdate(d.proposal_open_contract||d.data?.proposal_open_contract||d);
+  if(type==='buy'&&d.buy?.contract_id)log(`Deriv accepted buy request; contract ${d.buy.contract_id}.`);
+}
+function handleContractUpdate(c){
+  if(!c||Number(c.is_sold)!==1)return;
+  const id=String(c.contract_id||'');if(!id||closedContractIds.has(id))return;
+  closedContractIds.add(id);activeContracts.delete(id);
+  const profit=Number(c.profit);if(Number.isFinite(profit))tradeSessionPnL+=profit;
+  if(Number.isFinite(profit)&&profit<0)tradeLossStreakCount++;else if(Number.isFinite(profit)&&profit>0)tradeLossStreakCount=0;
+  const currency=selectedTradeAccount()?.currency||'account currency';
+  log(`Contract ${id} settled: ${Number.isFinite(profit)?profit.toFixed(2):'P/L unavailable'} ${currency}. Session P/L ${tradeSessionPnL.toFixed(2)}.`);
+  updateTradeMetrics();
+  const maxLoss=Number($('tradeLossLimit').value),maxStreak=Math.max(1,Math.min(10,Number($('tradeLossStreak').value)||3));
+  if(tradeSessionPnL<=-Math.abs(maxLoss)||tradeLossStreakCount>=maxStreak){$('executionStyle').value='manual';disarmTrading(tradeSessionPnL<=-Math.abs(maxLoss)?'Session loss limit reached; new orders stopped.':'Consecutive-loss stop reached; new orders stopped.');showTradeError('Risk limit reached. Review results before arming execution again.');}
+}
+function contractFromSignal(signal){
+  const pick=String(signal.pick||'').toUpperCase();let contract_type='',barrier;
+  if(signal.family==='RF')contract_type=pick==='RISE'?'CALL':pick==='FALL'?'PUT':'';
+  else if(signal.family==='EO')contract_type=pick==='EVEN'?'DIGITEVEN':pick==='ODD'?'DIGITODD':'';
+  else if(signal.family==='OU'){contract_type=pick.startsWith('OVER')?'DIGITOVER':pick.startsWith('UNDER')?'DIGITUNDER':'';barrier=pick.match(/\b(\d)\b/)?.[1];}
+  else if(signal.family==='MT'){contract_type='DIGITMATCH';barrier=pick.match(/\b(\d)\b/)?.[1];}
+  if(!contract_type)throw new Error(`Unsupported signal for order mapping: ${pick}`);
+  if(['DIGITMATCH','DIGITOVER','DIGITUNDER'].includes(contract_type)&&barrier===undefined)throw new Error('Signal is missing its digit barrier. No order sent.');
+  return {contract_type,barrier};
+}
+function validateTradeRisk(){
+  const stake=Number($('tradeStake').value),cap=Number($('tradeStakeCap').value),maxOrders=Number($('tradeMaxOrders').value),lossLimit=Number($('tradeLossLimit').value);
+  if(!Number.isFinite(stake)||stake<=0||!Number.isFinite(cap)||cap<=0||stake>cap)throw new Error('Stake must be positive and no greater than the maximum stake/order cap.');
+  if(!Number.isInteger(maxOrders)||maxOrders<1||maxOrders>100)throw new Error('Max orders/session must be an integer from 1 to 100.');
+  if(!Number.isFinite(lossLimit)||lossLimit<=0)throw new Error('Session loss stop must be positive.');
+  if(tradeOrdersCount>=maxOrders)throw new Error(`Session order cap reached (${maxOrders}).`);
+  if(tradeSessionPnL<=-Math.abs(lossLimit))throw new Error('Session loss stop has already been reached.');
+  const maxStreak=Math.max(1,Math.min(10,Number($('tradeLossStreak').value)||3));
+  if(tradeLossStreakCount>=maxStreak)throw new Error(`Consecutive-loss stop has already been reached (${maxStreak}).`);
+  return {stake,cap};
+}
+async function executeSignal(signal,source='manual'){
+  if(!tradeArmed)throw new Error('Execution is disarmed. Press Connect account & arm execution first.');
+  if(!signal||!signal.eligible||!signal.symbol||!signal.pick)throw new Error('There is no currently qualified signal to trade.');
+  if(tradeBusy)throw new Error('An order request is already in progress.');
+  const risk=validateTradeRisk(),account=selectedTradeAccount(),mode=tradeMode();
+  if(!account)throw new Error('Select an authorized account first.');
+  if(mode==='real'&&$('realPhrase').value.trim()!=='TRADE REAL')throw new Error('REAL mode is locked. Type exactly TRADE REAL, then arm execution again.');
+  tradeBusy=true;updateTradeMetrics();clearTradeError();
+  try{
+    await ensureTradeSocket();
+    const mapped=contractFromSignal(signal);
+    const proposalRequest={proposal:1,amount:risk.stake,basis:'stake',contract_type:mapped.contract_type,currency:String(account.currency||'USD').toUpperCase(),duration:Math.max(1,Math.min(1000,Math.round(Number(signal.horizon)||1))),duration_unit:'t',underlying_symbol:signal.symbol};
+    if(mapped.barrier!==undefined)proposalRequest.barrier=String(mapped.barrier);
+    setTradeStatus(`Requesting a price for ${signal.pick} on ${signal.market} (${mode.toUpperCase()})…`);
+    const pResponse=await tradeCall(proposalRequest);
+    const proposal=pResponse.proposal||pResponse.data?.proposal;
+    if(!proposal?.id)throw new Error('Deriv did not return a proposal ID. No buy request was sent.');
+    const askPrice=Number(proposal.ask_price);
+    if(!Number.isFinite(askPrice)||askPrice<=0)throw new Error('Deriv returned an invalid proposal price. No buy request was sent.');
+    if(askPrice>risk.cap+1e-8)throw new Error(`Proposal cost ${askPrice} is above your max stake/order cap ${risk.cap}. No buy request was sent.`);
+    if(source==='manual'){
+      const wording=`Place ${mode.toUpperCase()} order?\n\n${signal.pick}\nMarket: ${signal.market} (${signal.symbol})\nContract: ${mapped.contract_type}${mapped.barrier!==undefined?' · barrier '+mapped.barrier:''}\nDuration: ${Math.max(1,Math.round(Number(signal.horizon)||1))} tick(s)\nStake: ${askPrice} ${account.currency||'USD'}\nScore: ${signal.score}/100`;
+      if(!window.confirm(wording)){setTradeStatus('Order cancelled before the buy request.');return;}
+    }
+    if(!tradeArmed)throw new Error('Execution was stopped before the buy request. Proposal only; no purchase request was sent.');
+    setTradeStatus(`Submitting ${mode.toUpperCase()} order for ${signal.pick}…`);
+    const bResponse=await tradeCall({buy:String(proposal.id),price:askPrice});
+    const bought=bResponse.buy||bResponse.data?.buy;
+    if(!bought?.contract_id)throw new Error('Deriv did not confirm a contract ID. Check Deriv transactions before retrying.');
+    const id=String(bought.contract_id);activeContracts.set(id,{signal,source,stake:askPrice});tradeOrdersCount++;updateTradeMetrics();
+    log(`BUY ACCEPTED · ${mode.toUpperCase()} · ${signal.market} · ${signal.pick} · stake ${askPrice} ${account.currency||'USD'} · contract ${id}`);
+    setTradeStatus(`Order accepted by Deriv. Contract ${id} · ${signal.pick} · ${askPrice} ${account.currency||'USD'}.`);
+    const subReq={proposal_open_contract:1,contract_id:Number(id),subscribe:1,req_id:tradeReqId++};
+    try{tradeSocket.send(JSON.stringify(subReq));}catch(err){log(`Contract ${id} bought, but status subscription failed: ${err.message}. Check the Deriv portfolio.`);}
+    if(tradeMode()==='real')$('tradeBadge').className='badge bad';
+  }finally{tradeBusy=false;updateTradeMetrics();}
+}
+async function manualTrade(){
+  if($('executionStyle').value!=='manual'){showTradeError('Select Manual execution to use this button, or select AUTO and arm execution.');return;}
+  if(!currentSignal){showTradeError('No currently qualified signal. Wait for the scanner to generate one.');return;}
+  if(tradeMode()==='real'&&!window.confirm('REAL MONEY WARNING\n\nThis request can spend real funds on Deriv. Continue to the proposal and final order confirmation?'))return;
+  try{await executeSignal(currentSignal,'manual');}catch(err){showTradeError(err.message);setTradeStatus(`Order not completed: ${err.message}`);log(`Order blocked or failed: ${err.message}`);}
+}
+async function armTrading(){
+  clearTradeError();
+  if(location.protocol==='file:'){showTradeError('This is a downloaded HTML file. Open your hosted HTTPS scanner URL; OAuth and account trading require server routes.');return;}
+  if(!running){showTradeError('Start Scan first so the selected signal is updating from live ticks.');return;}
+  if($('authBadge').textContent!=='DERIV: AUTHORIZED'){
+    showTradeError('Connect Deriv and approve the app on the Deriv login/consent page first.');return;
+  }
+  const account=selectedTradeAccount(),mode=tradeMode();
+  if(!account){showTradeError(`No authorized ${mode.toUpperCase()} account is selected. Check the account dropdown after connecting Deriv.`);return;}
+  if(mode==='real'){
+    if($('realPhrase').value.trim()!=='TRADE REAL'){showTradeError('To unlock REAL mode, type exactly TRADE REAL in the confirmation field.');return;}
+    if(!window.confirm(`ARM REAL TRADING for ${account.loginid||account.account_id}?\n\nOrders can spend real funds. Stake ${$('tradeStake').value}, cap ${$('tradeStakeCap').value} per order, max ${$('tradeMaxOrders').value} orders, session loss stop ${$('tradeLossLimit').value} ${account.currency||'account currency'}.\n\nAuto mode will place orders for qualifying signals without asking again each time. Continue?`))return;
+  }else if(!window.confirm(`Arm ${$('executionStyle').value==='auto'?'AUTO':'MANUAL'} DEMO execution for ${account.loginid||account.account_id}? No real funds are used on a DEMO account.`))return;
+  try{
+    setTradeStatus(`Requesting a secured ${mode.toUpperCase()} trading channel from Deriv…`);
+    await ensureTradeSocket();tradeArmed=true;
+    $('modeBadge').textContent=`${mode.toUpperCase()} EXECUTION ARMED`;$('modeBadge').className='badge '+(mode==='real'?'bad':'good');
+    updateTradeMetrics();
+    setTradeStatus(`${mode.toUpperCase()} execution is ARMED for ${account.loginid||account.account_id}. ${$('executionStyle').value==='auto'?'AUTO mode is active; qualified signals may place orders within your limits.':'Manual mode: select Trade current signal for each order.'}`);
+    log(`${mode.toUpperCase()} execution ARMED for ${account.loginid||account.account_id} in ${$('executionStyle').value.toUpperCase()} mode.`);
+    // AUTO will place only after a fresh live tick re-evaluates the current signal.
+  }catch(err){disarmTrading('Could not arm execution.');showTradeError(err.message);log(`Trading authorization failed: ${err.message}`);}
+}
+function maybeAutoExecute(tickedSymbol){
+  if(!tradeArmed||$('executionStyle').value!=='auto'||tradeBusy||!currentSignal?.eligible||!running)return;
+  // Only act when the market that generated the chosen best signal just ticked;
+  // don't place an order from a stale signal because a different market updated.
+  if(!tickedSymbol||currentSignal.symbol!==tickedSymbol)return;
+  const mode=tradeMode();if(mode==='real'&&$('realPhrase').value.trim()!=='TRADE REAL'){disarmTrading('REAL confirmation text is missing; execution paused.');showTradeError('Type TRADE REAL and arm again before real auto-execution.');return;}
+  const signal=currentSignal,m=markets.get(signal.symbol);if(!m)return;
+  const key=`${signal.symbol}|${signal.family}`,tickIndex=m.prices.length-1,allowAt=autoCooldowns.get(key)||-1;
+  if(tickIndex<allowAt||Date.now()-lastAutoOrderAt<1500)return;
+  const minScore=62;if(signal.score<minScore)return;
+  autoCooldowns.set(key,tickIndex+Math.max(5,Number(signal.horizon)||1)+4);lastAutoOrderAt=Date.now();
+  executeSignal({...signal},'auto').catch(err=>{showTradeError(err.message);setTradeStatus(`AUTO order blocked/failed: ${err.message}`);log(`AUTO execution blocked/failed: ${err.message}`);});
+}
+
+async function refreshAuth(){
+  // A successful OAuth callback is preserved for this first return only. Remove the
+  // marker from the address bar so a later refresh/open starts a fresh scanner session.
+  const initialUrl = new URL(location.href);
+  if(initialUrl.searchParams.get('oauth_callback')==='complete'){
+    history.replaceState({},document.title,location.pathname);
+  }
+  if(location.protocol==='file:'){
+    $('authBadge').textContent='DERIV: OPEN VIA WEBSITE';$('authBadge').className='badge warn';
+    $('authStatus').textContent='This page was opened as a file. OAuth routes such as /login do not exist under file://. Use the public HTTPS site URL, or run the local server and open http://localhost:8000/.';
+    $('connectBtn').textContent='Open website URL first';$('authError').textContent='ERR_FILE_NOT_FOUND happens when Connect Deriv is clicked from a file:// page. The scanner must be opened through its HTTP(S) website so /login and /callback reach the server.';$('authError').classList.remove('hidden');
+    return;
+  }
+  try{
+    const config=await fetch(new URL('/api/config',location.origin),{cache:'no-store'}).then(r=>r.json());
+    const status=await fetch(new URL('/api/auth/status',location.origin),{cache:'no-store'}).then(r=>r.json());
+    const error=new URLSearchParams(location.search).get('auth_error');
+    if(error){$('authError').textContent=`Deriv authorization notice: ${error}`;$('authError').classList.remove('hidden');history.replaceState({},document.title,location.pathname);}
+    if(status.authenticated){
+      const accounts=Array.isArray(status.accounts)?status.accounts:[];tradeAccounts=accounts;renderTradeAccounts();
+      const labels=accounts.map(a=>a.loginid||a.login_id||a.account_id||a.name).filter(Boolean);
+      $('authBadge').textContent='DERIV: AUTHORIZED';$('authBadge').className='badge good';$('authStatus').textContent=labels.length?`OAuth succeeded. Account(s) returned by Deriv: ${labels.join(', ')}. Select an account in the execution panel before arming execution.`:'OAuth succeeded and the account endpoint responded. Select an account in the execution panel before arming execution.';
+      $('logoutBtn').classList.remove('hidden');$('connectBtn').textContent='Connect / Switch Deriv Account';
+    }else{
+      tradeAccounts=[];renderTradeAccounts();
+      $('authBadge').textContent=config.configured?'DERIV: LOGIN NEEDED':'DERIV: SETUP NEEDED';$('authBadge').className='badge '+(config.configured?'warn':'');
+      $('authStatus').textContent=status.error?`Authorization is not active: ${status.error}`:config.configured?`Fresh OAuth is ready. Click “Connect Deriv with OAuth” to go to Deriv and authorize an account for this scanner session. The scanner clears its own previous login when a fresh page is opened. Callback: ${config.redirect_uri}`:config.public_deploy?'Public market scanning is available without login. Deriv account connection is waiting for the site owner to finish one-time OAuth setup; visitors do not need to enter any ID.':'Public scanning does not require login. To connect a Deriv account, complete the one-time local OAuth application setup.';
+      $('logoutBtn').classList.add('hidden');$('connectBtn').textContent=config.configured?'Connect Deriv with OAuth':(config.public_deploy?'Deriv OAuth setup pending':'Set up Deriv OAuth');
+    }
+  }catch(err){$('authBadge').textContent='DERIV: SERVER UNREACHABLE';$('authBadge').className='badge warn';$('authStatus').textContent='Could not reach the scanner OAuth backend. Open the deployed HTTPS website URL or check the hosting service status.';log(`Auth status check failed: ${err.message}`);}
+}
+let oauthOpening=false;
+async function beginOAuth(){
+  if(location.protocol==='file:'){
+    $('authError').textContent='Cannot start OAuth from a downloaded file. Open this scanner through the localhost website started by the V2 launcher.';$('authError').classList.remove('hidden');return;
+  }
+  if(oauthOpening)return;
+  oauthOpening=true;
+  const connectBtn=$('connectBtn');const originalLabel=connectBtn.textContent;
+  connectBtn.disabled=true;connectBtn.textContent='Opening Deriv authorization…';
+  try{
+    const response=await fetch(new URL('/api/config?fresh='+Date.now(),location.origin),{cache:'no-store',credentials:'same-origin'});
+    if(!response.ok)throw new Error(`scanner server returned HTTP ${response.status}`);
+    const config=await response.json();
+    if(!config.configured){
+      const message=config.public_deploy
+        ?'Deriv OAuth is not finished on this hosted site yet. You do not need to enter an ID here. The site owner must register the exact /callback URL in a Deriv OAuth app and set DERIV_CLIENT_ID on the server.'
+        :'Deriv OAuth needs a one-time app Client ID setup. This is not your Deriv account ID, password, API token, or authorization code.';
+      $('authError').textContent=message;$('authError').classList.remove('hidden');
+      $('authStatus').textContent=message;
+      log('OAuth redirect blocked because the scanner owner has not completed the required app configuration. No visitor ID was requested.');
+      return;
+    }
+    const target=new URL('/login',location.origin);
+    target.searchParams.set('fresh',String(Date.now()));
+    log('Redirecting this tab to Deriv OAuth. After approval, Deriv returns to this scanner. A Deriv security block must be resolved by Deriv Support.');
+    window.location.assign(target.href);
+  }catch(err){
+    $('authError').textContent='Could not start Deriv authorization: '+err.message;$('authError').classList.remove('hidden');
+    $('authStatus').textContent=`OAuth route unavailable: ${err.message}`;
+    log(`OAuth start failed: ${err.message}`);
+  }finally{
+    oauthOpening=false;connectBtn.disabled=false;connectBtn.textContent=originalLabel;
+  }
+}
+$('startBtn').addEventListener('click',startScan);$('stopBtn').addEventListener('click',stopScan);$('connectBtn').addEventListener('click',beginOAuth);$('logoutBtn').addEventListener('click',()=>{disarmTrading('Disconnected from Deriv.');if(location.protocol!=='file:')window.location.assign(new URL('/logout',location.origin).href);});$('familyFilter').addEventListener('change',()=>{renderAll();log(`Signal view changed to ${$('familyFilter').selectedOptions[0].textContent}.`);});
+$('tradeMode').addEventListener('change',()=>{disarmTrading('Account type changed; arm again to continue.');$('realPhraseWrap').classList.toggle('hidden',$('tradeMode').value!=='real');if($('tradeMode').value!=='real')$('realPhrase').value='';renderTradeAccounts();});
+$('executionStyle').addEventListener('change',()=>{if(tradeArmed){setTradeStatus($('executionStyle').value==='auto'?'Auto mode selected. Qualified signals may execute within the configured limits.':'Manual mode selected. Use Trade current signal for each order.');}});
+$('tradeAccount').addEventListener('change',()=>{disarmTrading('Account changed; arm again to continue.');});
+$('armTradeBtn').addEventListener('click',armTrading);$('manualTradeBtn').addEventListener('click',manualTrade);$('stopTradeBtn').addEventListener('click',()=>disarmTrading('Stopped by user. No new orders will be sent; any open contracts remain with Deriv.'));
+renderAll();refreshAuth();renderTradeAccounts();updateTradeMetrics();log('Build V2.1-STABLE-OAUTH-20261015 loaded: official public Options WebSocket only; single-tab OAuth redirect; session-only execution; explicit DEMO/REAL arming.');
+</script>
+</body></html>
