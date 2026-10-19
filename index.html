@@ -34,11 +34,11 @@
         <div class="kpi"><div id="resolvedKpi" class="v">0</div><div class="l">Paper checks resolved</div></div>
         <div class="kpi"><div id="rateKpi" class="v">—</div><div class="l">Observed paper win rate</div></div>
       </div>
-      <div class="notice">Signals are heuristic research, not guaranteed predictions. Execution is OFF until you connect Deriv and arm it. Auto mode is optional; REAL orders use real funds.</div>
+      <div class="notice">Choose a scan family above: ALL compares Rise/Fall, Even/Odd, Over/Under and Matches; selecting one family limits ranking to that family. AUTO queues only the highest-ranked currently qualified setup across the selected scope, subject to your limits. Signals are heuristic research, not guaranteed predictions. REAL orders use real funds.</div>
     </section>
 
     <section class="panel">
-      <div class="rowhead"><h2>Best current setup</h2><select id="familyFilter" class="select" aria-label="Contract family"><option value="ALL">All four families</option><option value="RF">Rise / Fall</option><option value="EO">Even / Odd</option><option value="OU">Over / Under</option><option value="MT">Matches</option></select></div>
+      <div class="rowhead"><h2>Best current setup · scan family</h2><select id="familyFilter" class="select" aria-label="Scan family"><option value="ALL">All four families</option><option value="RF">Rise / Fall</option><option value="EO">Even / Odd</option><option value="OU">Over / Under</option><option value="MT">Matches</option></select></div>
       <div class="predgrid"><div class="hero"><div class="small">HIGHEST-RANKED CURRENT SIGNAL</div><div id="predMarket" class="market">Waiting for market data…</div><div id="predPick" class="pick">NO EDGE</div><div id="predFamily" class="family">No qualified setup</div><div class="scoreline"><div id="predScore" class="score">—</div><div class="small" style="padding-bottom:5px">signal score / 100</div></div><div class="meter"><span id="scoreMeter"></span></div><div id="predReason" class="reason">Start scanning to collect ticks and build the transition mesh.</div></div>
         <div class="facts"><div class="fact"><b id="predQuality">—</b><span>Research grade</span></div><div class="fact"><b id="predHorizon">—</b><span>Resolution horizon</span></div><div class="fact"><b id="predRegime">—</b><span>Price regime</span></div><div class="fact"><b id="predTrans">—</b><span>Current-digit transition</span></div><div class="fact"><b id="predRsi">—</b><span>RSI 14 reference</span></div><div class="fact"><b id="predSr">—</b><span>Micro support / resistance</span></div></div>
       </div>
@@ -608,9 +608,17 @@ function maybeAutoExecute(tickedSymbol){
   if(!m||!m.connected)return;
   // Evaluate the market that just ticked, not the single global "best setup".
   // Stronger threshold reduces frequency; it does not guarantee a winning trade.
-  const signal=signalForMarket(m);
   const minScore=75;
-  if(!signal?.eligible||signal.pick==='NO EDGE'||Number(signal.score)<minScore)return;
+  // Rank all currently connected markets in the selected family scope. AUTO
+  // queues only the global top qualified setup, not every market's local winner.
+  // Attach symbol/market explicitly so the execution payload is complete.
+  const ranked=[...markets.values()].filter(x=>x.connected&&x.prices.length>=MIN_TICKS)
+    .map(x=>({m:x,s:{...signalForMarket(x),symbol:x.symbol,market:x.name}}))
+    .filter(x=>x.s.eligible&&x.s.pick!=='NO EDGE'&&Number(x.s.score)>=minScore)
+    .sort((a,b)=>Number(b.s.score)-Number(a.s.score)||Number(b.s.edge||0)-Number(a.s.edge||0)||Number(b.s.n||0)-Number(a.s.n||0));
+  const top=ranked[0];
+  if(!top||top.m.symbol!==tickedSymbol)return;
+  const signal=top.s;
   const key=`${signal.symbol}|${signal.family}`;
   const tickIndex=m.prices.length-1,allowAt=autoCooldowns.get(key)||-1;
   if(tickIndex<allowAt||autoQueuedKeys.has(key))return;
@@ -620,7 +628,7 @@ function maybeAutoExecute(tickedSymbol){
   autoCooldowns.set(key,tickIndex+Math.max(5,Number(signal.horizon)||1)+4);
   autoQueuedKeys.add(key);
   autoOrderQueue.push({...signal,_autoKey:key});
-  log(`Strong signal queued: ${signal.market} · ${signal.pick} · score ${signal.score}/100 · queue ${autoOrderQueue.length}/3.`);
+  log(`TOP-RANKED signal queued: ${signal.market} · ${signal.pick} · ${signal.family} · score ${signal.score}/100 · scope ${$('familyFilter').value} · queue ${autoOrderQueue.length}/3.`);
   drainAutoOrderQueue();
 }
 async function drainAutoOrderQueue(){
@@ -727,6 +735,6 @@ const resumeScanAfterOAuth=(()=>{const q=new URLSearchParams(location.search);re
 renderAll();refreshAuth();renderTradeAccounts();updateTradeMetrics();
 $('refreshBalanceBtn').addEventListener('click',async()=>{const btn=$('refreshBalanceBtn');btn.disabled=true;$('balanceRefreshStatus').textContent='Refreshing balances from Deriv…';try{await refreshAuth();$('balanceRefreshStatus').textContent='Balance refresh request completed.';}catch(err){$('balanceRefreshStatus').textContent='Balance refresh failed: '+err.message;}finally{btn.disabled=false;}});
 if(resumeScanAfterOAuth){setTimeout(()=>{if(!running)startScan();},250);}
-log('Build V2.2-OAUTH-BALANCE-FIX loaded: public Options WebSocket; account balance cards; DEMO/REAL account selection; trading remains disarmed until explicitly armed.');
+log('Build V2.3-TOP-SIGNAL loaded: choose one family or ALL; AUTO queues only the highest-ranked qualified setup in the selected scope; trading remains disarmed until explicitly armed.');
 </script>
 </body></html>
