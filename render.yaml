@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: deriv-pipbox-volatility-scanner
+    runtime: python
+    plan: free
+    buildCommand: python -m py_compile server.py
+    startCommand: python server.py
+    healthCheckPath: /health
+    envVars:
+      - key: PUBLIC_DEPLOY
+        value: "1"
+      - key: HOST
+        value: "0.0.0.0"
+      - key: DERIV_SCOPES
+        value: "trade"
+      - key: PYTHONUNBUFFERED
+        value: "1"
