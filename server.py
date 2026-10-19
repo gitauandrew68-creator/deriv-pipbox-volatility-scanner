@@ -194,14 +194,27 @@ def post_form(url: str, form: dict[str, str]) -> dict[str, Any]:
         return json.loads(response.read().decode("utf-8"))
 
 
+def oauth_client_secret() -> str:
+    # Optional confidential-client secret. PKCE-only clients can leave this unset.
+    # This value stays server-side and is never sent to the browser.
+    return os.getenv("DERIV_CLIENT_SECRET", "").strip()
+
+
+def with_optional_client_secret(form: dict[str, str]) -> dict[str, str]:
+    secret = oauth_client_secret()
+    if secret:
+        form["client_secret"] = secret
+    return form
+
+
 def exchange_code(code: str, verifier: str, client_id: str, redirect_uri: str) -> dict[str, Any]:
-    return post_form(TOKEN_URL, {
+    return post_form(TOKEN_URL, with_optional_client_secret({
         "grant_type": "authorization_code",
         "client_id": client_id,
         "code": code,
         "code_verifier": verifier,
         "redirect_uri": redirect_uri,
-    })
+    }))
 
 
 def refresh_access_token(session: dict[str, Any], client_id: str) -> str:
@@ -210,11 +223,11 @@ def refresh_access_token(session: dict[str, Any], client_id: str) -> str:
     refresh = session.get("refresh_token")
     if not refresh:
         raise RuntimeError("Deriv login expired. Press Connect Deriv and sign in again.")
-    data = post_form(TOKEN_URL, {
+    data = post_form(TOKEN_URL, with_optional_client_secret({
         "grant_type": "refresh_token",
         "client_id": client_id,
         "refresh_token": str(refresh),
-    })
+    }))
     access_token = data.get("access_token")
     if not access_token:
         raise RuntimeError("Deriv did not return a refreshed access token. Sign in again.")
@@ -255,14 +268,50 @@ def account_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
         else:
             # Unknown account types are never made tradable by inference.
             normalized_type = "unknown"
+        balance = item.get("balance")
+        # Deriv may return balances as decimal strings or numbers. Preserve the
+        # returned numeric scalar; the UI formats it and never invents a value.
+        if isinstance(balance, bool) or not isinstance(balance, (str, int, float)) or str(balance).strip() == "":
+            balance = None
         rows.append({
             "account_id": account_id,
             "loginid": loginid or account_id,
             "account_type": normalized_type,
             "currency": str(item.get("currency") or "USD").strip().upper(),
+            "balance": balance,
             "is_virtual": virtual if isinstance(virtual, bool) else (normalized_type == "demo" if normalized_type != "unknown" else None),
         })
     return rows
+
+
+def oauth_exchange_error_message(exc: urllib.error.HTTPError) -> str:
+    """Summarize OAuth endpoint errors without showing provider HTML."""
+    content_type = (exc.headers.get("Content-Type", "") if exc.headers else "").lower()
+    request_id = ""
+    if exc.headers:
+        request_id = (exc.headers.get("cf-ray") or exc.headers.get("x-request-id")
+                      or exc.headers.get("request-id") or "")
+    suffix = f" Reference: {request_id}." if request_id else ""
+    if exc.code == 403 and "html" in content_type:
+        message = (
+            "Deriv returned HTTP 403 HTML during the server-side OAuth token exchange; "
+            "the user approved login, but no access token was issued. Confirm this Client ID "
+            "and callback belong to the same OAuth app."
+        )
+        if not oauth_client_secret():
+            message += (
+                " If the Deriv dashboard provides a Client Secret for this app, set it privately "
+                "as DERIV_CLIENT_SECRET in Render Environment; do not paste it into the scanner."
+            )
+        return (message + suffix)[:650]
+    try:
+        payload = json.loads(exc.read().decode("utf-8", "replace"))
+        errors = payload.get("errors", [])
+        if errors and isinstance(errors[0], dict):
+            return f"Deriv token exchange failed ({exc.code}): {errors[0].get('message', 'OAuth request rejected')}."[:650]
+    except Exception:
+        pass
+    return f"Deriv token exchange failed ({exc.code}).{suffix}"[:650]
 
 
 SETUP_HTML = r"""<!doctype html>
@@ -530,15 +579,9 @@ class Handler(BaseHTTPRequestHandler):
             tokens = exchange_code(code, str(pending["verifier"]), client_id, redirect_uri)
         except Exception as exc:
             sessions.pop(sid, None)
-            # Do not leave authorization details in logs or the page; return a short message.
-            message = str(exc)
-            if isinstance(exc, urllib.error.HTTPError):
-                try:
-                    detail = exc.read().decode("utf-8", "replace")[:220]
-                    message = f"Deriv token exchange failed ({exc.code}). {detail}"
-                except Exception:
-                    message = f"Deriv token exchange failed ({exc.code})."
-            redirect(self, "/?auth_error=" + urllib.parse.quote(message[:300]))
+            # Do not expose provider HTML pages, authorization codes, tokens, or secrets.
+            message = oauth_exchange_error_message(exc) if isinstance(exc, urllib.error.HTTPError) else str(exc)
+            redirect(self, "/?auth_error=" + urllib.parse.quote(message[:650]))
             return
         finally:
             # The authorization code is single-use; delete its verifier immediately.
