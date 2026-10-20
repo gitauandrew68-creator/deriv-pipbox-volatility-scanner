@@ -251,6 +251,20 @@ function signalForFamily(m,family){
   return {...best,quality,eligible,rsi,reg,sr,transition:best?.transition||tr[0]?.[0]||'—',reasons:best?.reasons||[],candidates:cand,dsCount:ds.length};
 }
 function signalForMarket(m){return signalForFamily(m,$('familyFilter').value);}
+// Build a comparable candidate list across the selected scope. The family scores
+// have different ceilings (Over/Under can hit 86 and Matches 88), so sorting only
+// by the capped score lets those families win every tie. Rank by their measured
+// excess over that family's baseline first, then score/sample size. The strategy
+// score formulas and each family's eligibility gates remain unchanged.
+function rankedFamilySignals({eligibleOnly=false,minScore=0}={}){
+  const scope=$('familyFilter').value;
+  const families=scope==='ALL'?['RF','EO','OU','MT']:[scope];
+  return [...markets.values()]
+    .filter(m=>m.connected&&m.prices.length>=MIN_TICKS)
+    .flatMap(m=>families.map(family=>({m,s:{...signalForFamily(m,family),symbol:m.symbol,market:m.name}})))
+    .filter(x=>x.s.pick!=='NO EDGE'&&(!eligibleOnly||x.s.eligible)&&Number(x.s.score)>=minScore)
+    .sort((a,b)=>Number(b.s.edge||0)-Number(a.s.edge||0)||Number(b.s.score)-Number(a.s.score)||Number(b.s.n||0)-Number(a.s.n||0));
+}
 function renderMarkets(){
   const total=markets.size,live=[...markets.values()].filter(m=>m.connected).length;
   $('marketsKpi').textContent=String(total);$('marketCountLabel').textContent=`${live}/${total} markets live`;
@@ -262,7 +276,7 @@ function renderMarkets(){
   }).join('');
 }
 function renderPrediction(){
-  const ranked=[...markets.values()].map(m=>({m,s:signalForMarket(m)})).filter(x=>x.s.eligible&&x.s.pick!=='NO EDGE').sort((a,b)=>b.s.score-a.s.score);
+  const ranked=rankedFamilySignals({eligibleOnly:true,minScore:75});
   $('qualKpi').textContent=String(ranked.length);
   const item=ranked[0];
   if(!item){
@@ -285,8 +299,8 @@ function renderMesh(){
   $('meshTable').innerHTML=rows.length?`<table><thead><tr><th>Digit transition</th><th>Count</th><th>Share of pooled edges</th></tr></thead><tbody>${rows.map(([edge,n])=>`<tr><td><b>${esc(edge)}</b></td><td>${n}</td><td>${count?(n/count*100).toFixed(2):'0.00'}%</td></tr>`).join('')}</tbody></table>`:'<div class="smallmuted" style="padding:10px">Mesh will fill after tick history arrives.</div>';
 }
 function renderSignals(){
-  const rows=[...markets.values()].map(m=>({m,s:signalForMarket(m)})).filter(x=>x.s.pick!=='NO EDGE'&&x.s.quality!=='BUILDING').sort((a,b)=>b.s.score-a.s.score).slice(0,40);
-  $('signalCountLabel').textContent=`${rows.filter(x=>x.s.eligible).length} qualified · ${rows.length} ranked/watch signals`;
+  const rows=rankedFamilySignals().filter(x=>x.s.quality!=='BUILDING').slice(0,60);
+  $('signalCountLabel').textContent=`${rows.filter(x=>x.s.eligible).length} qualified · ${rows.length} ranked/watch signals across selected family scope`;
   $('signalsTable').innerHTML=rows.length?`<table><thead><tr><th>Market</th><th>Contract</th><th>Family</th><th>Score</th><th>Grade</th><th>Sample transitions</th><th>Reason / edge</th></tr></thead><tbody>${rows.map(({m,s})=>`<tr><td>${esc(m.name)}</td><td><b>${esc(s.pick)}</b></td><td>${familyName(s.family)}</td><td>${s.score}</td><td class="${s.eligible?'green':'yellow'}">${s.quality}</td><td>${s.n||0}</td><td>${esc((s.reasons||[]).slice(0,2).join('; '))}</td></tr>`).join('')}</tbody></table>`:'<div class="smallmuted" style="padding:10px">Waiting for enough data to rank setups.</div>';
 }
 function renderPaper(){
@@ -299,15 +313,10 @@ function renderPaper(){
 function renderAll(){renderMarkets();renderPrediction();renderMesh();renderSignals();renderPaper();}
 function maybeSchedulePaper(m,s){
   if(!running)return;
-  // Paper win rate must follow the same global top-signal gate as AUTO.
-  // Previously it counted every market's locally eligible setup, including
-  // lower-ranked signals that AUTO would never queue (score floor is 75).
-  const minScore=75;
-  const ranked=[...markets.values()]
-    .filter(x=>x.connected&&x.prices.length>=MIN_TICKS)
-    .map(x=>({m:x,s:{...signalForMarket(x),symbol:x.symbol,market:x.name}}))
-    .filter(x=>x.s.eligible&&x.s.pick!=='NO EDGE'&&Number(x.s.score)>=minScore)
-    .sort((a,b)=>Number(b.s.score)-Number(a.s.score)||Number(b.s.edge||0)-Number(a.s.edge||0)||Number(b.s.n||0)-Number(a.s.n||0));
+  // Paper checks use the same cross-family qualified ranking as AUTO, with the
+  // established 75 score floor. This tests the candidate AUTO would consider
+  // without lowering any family eligibility gate or changing score formulas.
+  const ranked=rankedFamilySignals({eligibleOnly:true,minScore:75});
   const top=ranked[0];
   if(!top||top.m.symbol!==m.symbol)return;
   s=top.s;
@@ -637,19 +646,9 @@ function maybeAutoExecute(tickedSymbol){
   }
   const m=markets.get(tickedSymbol);
   if(!m||!m.connected)return;
-  // Compare each family independently. Previously signalForMarket() returned
-  // only the single winner for each market; Over/Under often won that internal
-  // contest and hid qualified Rise/Fall, Even/Odd, and Matches setups from AUTO.
-  // Keep each family's own evidence gates, then rank the eligible candidates.
-  // The lower floor does not bypass eligibility: a candidate must pass its family
-  // evidence rules as well as this score floor.
-  const minScore=65;
-  const scope=$('familyFilter').value;
-  const families=scope==='ALL'?['RF','EO','OU','MT']:[scope];
-  const ranked=[...markets.values()].filter(x=>x.connected&&x.prices.length>=MIN_TICKS)
-    .flatMap(m=>families.map(family=>({m,s:{...signalForFamily(m,family),symbol:m.symbol,market:m.name}})))
-    .filter(x=>x.s.eligible&&x.s.pick!=='NO EDGE'&&Number(x.s.score)>=minScore)
-    .sort((a,b)=>Number(b.s.score)-Number(a.s.score)||Number(b.s.edge||0)-Number(a.s.edge||0)||Number(b.s.n||0)-Number(a.s.n||0));
+  // AUTO follows the same cross-family rank as paper verification. Keep the
+  // established 75 score floor and every contract family's evidence gates.
+  const ranked=rankedFamilySignals({eligibleOnly:true,minScore:75});
   const top=ranked[0];
   if(!top||top.m.symbol!==tickedSymbol)return;
   const signal=top.s;
