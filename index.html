@@ -68,7 +68,7 @@
       <label class="tradefield" for="tradeAccount">Authorized account<select id="tradeAccount" class="select"><option value="">Connect Deriv first</option></select><small>Only accounts returned by your OAuth session appear here.</small></label>
       <label class="tradefield" for="tradeStake">Stake per order<input id="tradeStake" type="number" min="0.35" max="1000" step="0.01" value="1.00"><small>Uses the selected account currency.</small></label>
       <label class="tradefield" for="tradeStakeCap">Maximum stake/order<input id="tradeStakeCap" type="number" min="0.35" max="1000" step="0.01" value="1.00"><small>Orders above this cap are blocked.</small></label>
-      <label class="tradefield" for="tradeMaxOrders">Max orders this session<input id="tradeMaxOrders" type="number" min="1" max="100" step="1" value="10"><small>Execution stops when the cap is reached.</small></label>
+      <label class="tradefield" for="tradeMaxOrders">Max accepted orders this session<input id="tradeMaxOrders" type="number" min="1" max="100" step="1" value="10"><small>Hard stop: once Deriv confirms this many buys, AUTO stops. This is not a target and does not force extra orders.</small></label>
       <label class="tradefield" for="tradeLossLimit">Session loss stop<input id="tradeLossLimit" type="number" min="1" max="10000" step="0.01" value="5.00"><small>Stops new orders at this realized loss.</small></label>
       <label class="tradefield" for="tradeLossStreak">Stop after consecutive losses<input id="tradeLossStreak" type="number" min="1" max="10" step="1" value="3"><small>Counts settled live contracts in this page session.</small></label>
       <label class="tradefield" for="executionStyle">Execution style<select id="executionStyle" class="select"><option value="manual" selected>Manual · click Trade Signal</option><option value="auto">AUTO · execute qualified signals</option></select><small>Auto is not active until you arm it.</small></label>
@@ -94,7 +94,7 @@
   </div>
 
   <section class="panel section"><div class="rowhead"><h2>Latest ranked signals</h2><span id="signalCountLabel" class="smallmuted">No signals yet</span></div><div id="signalsTable" class="tablewrap"></div></section>
-  <section class="panel section"><div class="rowhead"><h2>Paper verification — no real orders</h2><span id="paperSummary" class="smallmuted">Waiting for qualifying setups</span></div><div id="paperTable" class="tablewrap"></div></section>
+  <section class="panel section"><div class="rowhead"><h2>Signal verification — simulated outcomes; live P/L is separate</h2><span id="paperSummary" class="smallmuted">Waiting for qualifying setups</span></div><div id="paperTable" class="tablewrap"></div></section>
   <section class="panel section"><h2>Activity log</h2><div id="log" class="log" aria-live="polite"></div></section>
   <div class="footer">BUILD V2.1-STABLE-OAUTH-20261015 · Deriv OAuth 2.0 · public Options WebSocket only · trading requires explicit arming and account selection</div>
 </div>
@@ -120,6 +120,7 @@ let renderTimer=null;
 let tradeSocket=null, tradeSocketKey='', tradeReqId=5000, tradeRequests=new Map();
 let tradeArmed=false, tradeBusy=false, currentSignal=null, tradeAccounts=[];
 let tradeOrdersCount=0, tradeSessionPnL=0, tradeLossStreakCount=0;
+let autoMatchedPaperSession=false;
 let closedContractIds=new Set(), autoCooldowns=new Map(), lastAutoOrderAt=0;
 let autoOrderQueue=[], autoQueueRunning=false, autoQueuedKeys=new Set();
 let activeContracts=new Map();
@@ -321,16 +322,22 @@ function renderSignals(){
 function renderPaper(){
   const wins=paper.filter(x=>x.result==='WIN').length,losses=paper.filter(x=>x.result==='LOSS').length,total=wins+losses;
   $('pendingKpi').textContent=String(pending.length);$('resolvedKpi').textContent=String(total);$('rateKpi').textContent=total?`${(wins/total*100).toFixed(1)}%`:'—';
-  $('paperSummary').textContent=`${wins} wins · ${losses} losses · ${pending.length} unresolved · ${total?`${(wins/total*100).toFixed(1)}% observed win rate`:'no resolved sample yet'}`;
+  const matchedResolved=paper.filter(x=>x.matchedAuto).length;
+  const matchedPending=pending.filter(x=>x.matchedAuto).length;
+  $('paperSummary').textContent=`${wins} wins · ${losses} losses · ${pending.length} unresolved · ${total?`${(wins/total*100).toFixed(1)}% observed win rate`:'no resolved sample yet'}${autoMatchedPaperSession?` · AUTO-matched: ${matchedResolved} resolved / ${matchedPending} pending`:''}`;
   const rows=paper.slice(-100).reverse();
-  $('paperTable').innerHTML=rows.length?`<table><thead><tr><th>Time</th><th>Market</th><th>Family</th><th>Pick</th><th>Score</th><th>Entry price</th><th>Exit price</th><th>Result</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.time)}</td><td>${esc(x.market)}</td><td>${familyName(x.family)}</td><td><b>${esc(x.pick)}</b></td><td>${Number.isFinite(x.score)?x.score:'—'}</td><td>${esc(x.entryPriceText)}</td><td>${esc(x.exitPriceText)}</td><td class="${x.result==='WIN'?'green':'red'}"><b>${x.result}</b></td></tr>`).join('')}</tbody></table>`:'<div class="smallmuted" style="padding:10px">Paper results will appear after a qualified signal reaches its exact tick horizon.</div>';
+  $('paperTable').innerHTML=rows.length?`<table><thead><tr><th>Time</th><th>Market</th><th>Family</th><th>Pick</th><th>Score</th><th>Source</th><th>Entry price</th><th>Exit price</th><th>Result</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.time)}</td><td>${esc(x.market)}</td><td>${familyName(x.family)}</td><td><b>${esc(x.pick)}</b></td><td>${Number.isFinite(x.score)?x.score:'—'}</td><td>${x.matchedAuto?'AUTO accepted':'Paper only'}</td><td>${esc(x.entryPriceText)}</td><td>${esc(x.exitPriceText)}</td><td class="${x.result==='WIN'?'green':'red'}"><b>${x.result}</b></td></tr>`).join('')}</tbody></table>`:'<div class="smallmuted" style="padding:10px">Verification rows appear after qualified signals reach their tick horizon. In AUTO mode, matched rows are added only after Deriv confirms the corresponding buy.</div>';
 }
 function renderAll(){renderMarkets();renderPrediction();renderMesh();renderSignals();renderPaper();}
 function maybeSchedulePaper(m,s){
   if(!running)return;
-  // Paper checks use the same cross-family qualified ranking as AUTO, with the
-  // established 75 score floor. This tests the candidate AUTO would consider
-  // without lowering any family eligibility gate or changing score formulas.
+  // Once AUTO is armed, do not create a parallel stream of pretend paper orders.
+  // Each accepted AUTO buy below creates its own paired verification row instead.
+  // After this page has accepted an AUTO buy, keep samples matched while AUTO is
+  // selected—even after the session cap disarms it—rather than letting paper
+  // checks continue past the configured live-order limit.
+  if($('executionStyle').value==='auto'&&(tradeArmed||autoMatchedPaperSession))return;
+  // Paper-only mode uses the same cross-family qualified ranking and 75 score floor.
   const ranked=rankedFamilySignals({eligibleOnly:true,minScore:75});
   const top=ranked[0];
   if(!top||top.m.symbol!==m.symbol)return;
@@ -344,6 +351,26 @@ function maybeSchedulePaper(m,s){
   log(`Top-signal paper check queued: ${m.name} ${s.pick} · score ${s.score}/100 · ${s.horizon} tick(s).`);
   renderPaper();
 }
+function scheduleMatchedAutoPaper(signal){
+  if(!running)return;
+  const m=markets.get(signal.symbol);
+  if(!m||!m.connected||!m.prices.length||!Number.isInteger(m.digits.at(-1))) {
+    log(`AUTO buy accepted for ${signal.market}, but there is no current tick to create its paired verification check.`);
+    return;
+  }
+  const entryIndex=m.prices.length-1;
+  const horizon=Math.max(1,Math.round(Number(signal.horizon)||1));
+  const barrier=Number(signal.pick.split(' ').at(-1));
+  pending.push({
+    symbol:m.symbol,market:m.name,family:signal.family,pick:signal.pick,score:signal.score,
+    horizon,entryIndex,targetIndex:entryIndex+horizon,entryPrice:m.prices[entryIndex],
+    entryPriceText:m.quoteTexts.at(-1)||String(m.prices[entryIndex]),entryDigit:m.digits.at(-1),
+    barrier,created:Date.now(),matchedAuto:true
+  });
+  autoMatchedPaperSession=true;
+  log(`AUTO-matched verification queued after Deriv accepted the buy: ${m.name} ${signal.pick} · score ${signal.score}/100 · ${horizon} tick(s).`);
+  renderPaper();
+}
 function resolvesPosition(pos,m){
   const i=pos.targetIndex,exit=m.prices[i],digit=m.digits[i];if(!Number.isFinite(exit)||!Number.isInteger(digit))return null;
   let win=false;
@@ -351,7 +378,7 @@ function resolvesPosition(pos,m){
   else if(pos.family==='EO')win=(digit%2===0)===(pos.pick==='EVEN');
   else if(pos.family==='MT')win=digit===pos.barrier;
   else if(pos.family==='OU')win=pos.pick.startsWith('OVER')?digit>pos.barrier:digit<pos.barrier;
-  return {time:new Date().toLocaleTimeString(),market:pos.market,symbol:pos.symbol,family:pos.family,pick:pos.pick,score:pos.score,entryPriceText:pos.entryPriceText,exitPriceText:m.quoteTexts[i]||String(exit),result:win?'WIN':'LOSS',horizon:pos.horizon};
+  return {time:new Date().toLocaleTimeString(),market:pos.market,symbol:pos.symbol,family:pos.family,pick:pos.pick,score:pos.score,entryPriceText:pos.entryPriceText,exitPriceText:m.quoteTexts[i]||String(exit),result:win?'WIN':'LOSS',horizon:pos.horizon,matchedAuto:Boolean(pos.matchedAuto)};
 }
 function resolvePending(m){
   const still=[];
@@ -627,9 +654,15 @@ async function executeSignal(signal,source='manual'){
       tradeOrdersCount++;updateTradeMetrics();
       log(`BUY ACCEPTED · ${mode.toUpperCase()} · ${signal.market} · ${signal.pick} · stake ${risk.stake} ${account.currency||'USD'} · contract ${id}`);
       setTradeStatus(`Order accepted by Deriv. Contract ${id} · ${signal.pick} · stake ${risk.stake} ${account.currency||'USD'}.`);
+      // Only a buy confirmed by Deriv can generate a matched verification sample.
+      scheduleMatchedAutoPaper(signal);
       const subReq={proposal_open_contract:1,contract_id:Number(id),subscribe:1,req_id:tradeReqId++};
       try{tradeSocket.send(JSON.stringify(subReq));}catch(err){log(`Contract ${id} bought, but status subscription failed: ${err.message}. Check the Deriv portfolio.`);}
       if(mode==='real')$('tradeBadge').className='badge bad';
+      const maxOrders=Math.max(1,Math.min(100,Number($('tradeMaxOrders').value)||10));
+      if(tradeOrdersCount>=maxOrders){
+        disarmTrading(`Session order cap reached (${maxOrders}); AUTO stopped after ${tradeOrdersCount} accepted order(s).`);
+      }
       return;
     }
 
