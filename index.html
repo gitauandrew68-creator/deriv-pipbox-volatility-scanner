@@ -94,7 +94,7 @@
   </div>
 
   <section class="panel section"><div class="rowhead"><h2>Latest ranked signals</h2><span id="signalCountLabel" class="smallmuted">No signals yet</span></div><div id="signalsTable" class="tablewrap"></div></section>
-  <section class="panel section"><div class="rowhead"><h2>Signal verification — simulated outcomes; live P/L is separate</h2><span id="paperSummary" class="smallmuted">Waiting for qualifying setups</span></div><div id="paperTable" class="tablewrap"></div></section>
+  <section class="panel section"><div class="rowhead"><h2>Trade verification — Deriv-matched entry, exit and result</h2><span id="paperSummary" class="smallmuted">Waiting for qualifying setups</span></div><div id="paperTable" class="tablewrap"></div></section>
   <section class="panel section"><h2>Activity log</h2><div id="log" class="log" aria-live="polite"></div></section>
   <div class="footer">BUILD V2.1-STABLE-OAUTH-20261015 · Deriv OAuth 2.0 · public Options WebSocket only · trading requires explicit arming and account selection</div>
 </div>
@@ -320,8 +320,6 @@ function renderSignals(){
   $('signalsTable').innerHTML=rows.length?`<table><thead><tr><th>Market</th><th>Contract</th><th>Family</th><th>Score</th><th>Grade</th><th>Sample transitions</th><th>Reason / edge</th></tr></thead><tbody>${rows.map(({m,s})=>`<tr><td>${esc(m.name)}</td><td><b>${esc(s.pick)}</b></td><td>${familyName(s.family)}</td><td>${s.score}</td><td class="${s.eligible?'green':'yellow'}">${s.quality}</td><td>${s.n||0}</td><td>${esc((s.reasons||[]).slice(0,2).join('; '))}</td></tr>`).join('')}</tbody></table>`:'<div class="smallmuted" style="padding:10px">Waiting for enough data to rank setups.</div>';
 }
 function renderPaper(){
-  // Once execution has accepted any live order, show only rows linked to actual
-  // Deriv contract IDs. Entry/exit spots and the final result come from Deriv.
   const visiblePaper=liveMatchedPaperSession?paper.filter(x=>x.liveMirror):paper;
   const openLive=pending.filter(x=>x.liveMirror).map(x=>({...x,time:new Date(x.created).toLocaleTimeString(),result:'OPEN'}));
   const wins=visiblePaper.filter(x=>x.result==='WIN').length;
@@ -331,12 +329,14 @@ function renderPaper(){
   const pendingCount=liveMatchedPaperSession?openLive.length:pending.filter(x=>!x.liveMirror).length;
   $('pendingKpi').textContent=String(pendingCount);
   $('resolvedKpi').textContent=String(total);
-  $('rateKpi').textContent=total?`${(wins/total*100).toFixed(1)}%`:'—';
-  $('paperSummary').textContent=liveMatchedPaperSession
-    ? `${wins} wins · ${losses} losses${voids?` · ${voids} void`:''} · ${openLive.length} live contracts open · ${total?`${(wins/total*100).toFixed(1)}% observed contract win rate`:'waiting for first settlement'} · entry/exit from Deriv`
-    : `${wins} wins · ${losses} losses · ${pendingCount} unresolved paper checks · ${total?`${(wins/total*100).toFixed(1)}% simulated win rate`:'no resolved sample yet'} · no live orders mirrored yet`;
+  $('rateKpi').textContent=total?((wins/total*100).toFixed(1)+'%'):'—';
+  if(liveMatchedPaperSession){
+    $('paperSummary').textContent=wins+' wins · '+losses+' losses'+(voids?' · '+voids+' void':'')+' · '+openLive.length+' live contracts open · '+(total?((wins/total*100).toFixed(1)+'% observed contract win rate'):'waiting for first settlement')+' · entry/exit from Deriv';
+  }else{
+    $('paperSummary').textContent=wins+' wins · '+losses+' losses · '+pendingCount+' unresolved paper checks · '+(total?((wins/total*100).toFixed(1)+'% simulated win rate'):'no resolved sample yet')+' · no live orders mirrored yet';
+  }
   const rows=[...openLive.reverse(),...visiblePaper.slice(-100).reverse()];
-  $('paperTable').innerHTML=rows.length?`<table><thead><tr><th>Time</th><th>Market</th><th>Family</th><th>Pick</th><th>Score</th><th>Execution</th><th>Entry spot</th><th>Exit spot</th><th>Result</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.time)}</td><td>${esc(x.market)}</td><td>${familyName(x.family)}</td><td><b>${esc(x.pick)}</b></td><td>${Number.isFinite(x.score)?x.score:'—'}</td><td>${x.liveMirror?`${String(x.mode||'').toUpperCase()} ${String(x.executionSource||'').toUpperCase()} · Deriv`:'Paper only'}</td><td>${esc(x.entryPriceText||'—')}</td><td>${esc(x.exitPriceText||'—')}</td><td class="${x.result==='WIN'?'green':x.result==='LOSS'?'red':'yellow'}"><b>${esc(x.result)}</b></td></tr>`).join('')}</tbody></table>`:'<div class="smallmuted" style="padding:10px">Rows in paper-only mode use simulated ticks. After a Demo/Real order is accepted, verification rows mirror that contract ID and use Deriv's entry spot, exit spot, and final outcome.</div>';
+  $('paperTable').innerHTML=rows.length?`<table><thead><tr><th>Time</th><th>Market</th><th>Family</th><th>Pick</th><th>Score</th><th>Execution</th><th>Entry spot</th><th>Exit spot</th><th>Result</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.time)}</td><td>${esc(x.market)}</td><td>${familyName(x.family)}</td><td><b>${esc(x.pick)}</b></td><td>${Number.isFinite(x.score)?x.score:'—'}</td><td>${x.liveMirror?(String(x.mode||'').toUpperCase()+' '+String(x.executionSource||'').toUpperCase()+' · Deriv'):'Paper only'}</td><td>${esc(x.entryPriceText||'—')}</td><td>${esc(x.exitPriceText||'—')}</td><td class="${x.result==='WIN'?'green':x.result==='LOSS'?'red':'yellow'}"><b>${esc(x.result)}</b></td></tr>`).join('')}</tbody></table>`:'<div class="smallmuted" style="padding:10px">Paper-only rows use simulated ticks. After a Demo/Real order is accepted, the verification table mirrors that contract ID and uses Deriv entry spot, exit spot, and final result.</div>';
 }
 function renderAll(){renderMarkets();renderPrediction();renderMesh();renderSignals();renderPaper();}
 function maybeSchedulePaper(m,s){
@@ -389,12 +389,9 @@ function updateLivePaperFromContract(c){
   const index=pending.findIndex(x=>x.liveMirror&&x.contractId===id);
   if(index<0)return;
   const pos=pending[index],oldEntry=pos.entryPriceText,oldExit=pos.exitPriceText,oldStatus=pos.contractStatus;
-  // Use Deriv's actual spot fields. The tick fields are only a documented
-  // fallback when a response doesn't include a spot field.
+  // Spot columns show actual underlying spots reported by Deriv only.
   if(c.entry_spot!==undefined&&c.entry_spot!==null&&String(c.entry_spot)!=='')pos.entryPriceText=String(c.entry_spot);
-  else if(c.entry_tick!==undefined&&c.entry_tick!==null&&String(c.entry_tick)!=='')pos.entryPriceText=String(c.entry_tick);
   if(c.exit_spot!==undefined&&c.exit_spot!==null&&String(c.exit_spot)!=='')pos.exitPriceText=String(c.exit_spot);
-  else if(c.exit_tick!==undefined&&c.exit_tick!==null&&String(c.exit_tick)!=='')pos.exitPriceText=String(c.exit_tick);
   if(c.status!==undefined&&c.status!==null)pos.contractStatus=String(c.status);
   if(c.buy_price!==undefined&&c.buy_price!==null)pos.buyPriceText=String(c.buy_price);
   if(c.sell_price!==undefined&&c.sell_price!==null)pos.sellPriceText=String(c.sell_price);
