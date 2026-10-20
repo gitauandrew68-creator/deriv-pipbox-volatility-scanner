@@ -115,6 +115,8 @@ let ws = null, running = false, reqId = 1, pingTimer = null, reconnectTimer = nu
 let discovered = [], markets = new Map(), historyReqs = new Map(), pending = [], paper = [], signalLocks = new Map();
 let activeSymbolsReceived = false;
 let meshRevision=0, cachedMeshRevision=-1, cachedMeshStats=null;
+let rankedSignalsRevision=-1, rankedSignalsScope='', rankedSignalsCache=[];
+let renderTimer=null;
 let tradeSocket=null, tradeSocketKey='', tradeReqId=5000, tradeRequests=new Map();
 let tradeArmed=false, tradeBusy=false, currentSignal=null, tradeAccounts=[];
 let tradeOrdersCount=0, tradeSessionPnL=0, tradeLossStreakCount=0;
@@ -258,12 +260,25 @@ function signalForMarket(m){return signalForFamily(m,$('familyFilter').value);}
 // score formulas and each family's eligibility gates remain unchanged.
 function rankedFamilySignals({eligibleOnly=false,minScore=0}={}){
   const scope=$('familyFilter').value;
-  const families=scope==='ALL'?['RF','EO','OU','MT']:[scope];
-  return [...markets.values()]
-    .filter(m=>m.connected&&m.prices.length>=MIN_TICKS)
-    .flatMap(m=>families.map(family=>({m,s:{...signalForFamily(m,family),symbol:m.symbol,market:m.name}})))
-    .filter(x=>x.s.pick!=='NO EDGE'&&(!eligibleOnly||x.s.eligible)&&Number(x.s.score)>=minScore)
-    .sort((a,b)=>Number(b.s.edge||0)-Number(a.s.edge||0)||Number(b.s.score)-Number(a.s.score)||Number(b.s.n||0)-Number(a.s.n||0));
+  // Reuse the same ranked candidates for AUTO, paper checks, and the display
+  // during this tick revision; all three previously recalculated every market.
+  if(rankedSignalsRevision!==meshRevision||rankedSignalsScope!==scope){
+    const families=scope==='ALL'?['RF','EO','OU','MT']:[scope];
+    rankedSignalsCache=[...markets.values()]
+      .filter(m=>m.connected&&m.prices.length>=MIN_TICKS)
+      .flatMap(m=>families.map(family=>({m,s:{...signalForFamily(m,family),symbol:m.symbol,market:m.name}})))
+      .filter(x=>x.s.pick!=='NO EDGE')
+      .sort((a,b)=>Number(b.s.edge||0)-Number(a.s.edge||0)||Number(b.s.score)-Number(a.s.score)||Number(b.s.n||0)-Number(a.s.n||0));
+    rankedSignalsRevision=meshRevision;
+    rankedSignalsScope=scope;
+  }
+  return rankedSignalsCache.filter(x=>(!eligibleOnly||x.s.eligible)&&Number(x.s.score)>=minScore);
+}
+function scheduleRenderAll(){
+  // Keep the live decision path ahead of costly tables/DOM updates. A short
+  // UI throttle still refreshes quickly while coalescing bursts of 1s-market ticks.
+  if(renderTimer!==null)return;
+  renderTimer=setTimeout(()=>{renderTimer=null;renderAll();},120);
 }
 function renderMarkets(){
   const total=markets.size,live=[...markets.values()].filter(m=>m.connected).length;
@@ -392,10 +407,12 @@ function onTick(d){
   const quoteText=String(raw);m.decimals=decimalsFor(m.meta,quoteText);m.prices.push(price);m.quoteTexts.push(quoteText);m.digits.push(lastDigit(m,quoteText));m.raw.push({t:q.epoch||null,p:price});
   while(m.prices.length>500){m.prices.shift();m.quoteTexts.shift();m.digits.shift();m.raw.shift();for(const p of pending)if(p.symbol===symbol){p.entryIndex--;p.targetIndex--;}}
   m.connected=true;m.error=false;meshRevision++;
+  // Queue/submit AUTO first, before paper bookkeeping and table rendering.
+  // This makes the live entry path the highest-priority work on every new tick.
+  if(running)maybeAutoExecute(symbol);
   resolvePending(m);
-  if(running){const signal=signalForMarket(m);maybeSchedulePaper(m,signal);}
-  renderAll();
-  maybeAutoExecute(symbol);
+  if(running)maybeSchedulePaper(m,null);
+  scheduleRenderAll();
 }
 function connectPublic(){
   if(ws&&(ws.readyState===WebSocket.OPEN||ws.readyState===WebSocket.CONNECTING))return;
@@ -671,6 +688,20 @@ async function armTrading(){
 }
 function maybeAutoExecute(tickedSymbol){
   if(!tradeArmed||$('executionStyle').value!=='auto'||!running||!tickedSymbol)return;
+  // Enforce session safeguards before ranking/queueing. Once a configured cap
+  // is reached, stop once instead of queuing repeated orders that cannot execute.
+  const maxOrders=Math.max(1,Math.min(100,Number($('tradeMaxOrders').value)||10));
+  const lossLimit=Math.abs(Number($('tradeLossLimit').value)||5);
+  const maxStreak=Math.max(1,Math.min(10,Number($('tradeLossStreak').value)||3));
+  if(tradeOrdersCount>=maxOrders){
+    disarmTrading(`Session order cap reached (${maxOrders}); AUTO stopped. Review results and change the cap deliberately before re-arming.`);
+    return;
+  }
+  if(tradeSessionPnL<=-lossLimit||tradeLossStreakCount>=maxStreak){
+    disarmTrading(tradeSessionPnL<=-lossLimit?'Session loss stop reached; AUTO stopped.':'Consecutive-loss stop reached; AUTO stopped.');
+    showTradeError('A configured session risk limit has been reached. Review the session before arming again.');
+    return;
+  }
   const mode=tradeMode();
   if(mode==='real'&&$('realPhrase').value.trim()!=='TRADE REAL'){
     disarmTrading('REAL confirmation text is missing; execution paused.');
