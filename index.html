@@ -637,14 +637,17 @@ function maybeAutoExecute(tickedSymbol){
   }
   const m=markets.get(tickedSymbol);
   if(!m||!m.connected)return;
-  // Evaluate the market that just ticked, not the single global "best setup".
-  // Stronger threshold reduces frequency; it does not guarantee a winning trade.
-  const minScore=75;
-  // Rank all currently connected markets in the selected family scope. AUTO
-  // queues only the global top qualified setup, not every market's local winner.
-  // Attach symbol/market explicitly so the execution payload is complete.
+  // Compare each family independently. Previously signalForMarket() returned
+  // only the single winner for each market; Over/Under often won that internal
+  // contest and hid qualified Rise/Fall, Even/Odd, and Matches setups from AUTO.
+  // Keep each family's own evidence gates, then rank the eligible candidates.
+  // The lower floor does not bypass eligibility: a candidate must pass its family
+  // evidence rules as well as this score floor.
+  const minScore=65;
+  const scope=$('familyFilter').value;
+  const families=scope==='ALL'?['RF','EO','OU','MT']:[scope];
   const ranked=[...markets.values()].filter(x=>x.connected&&x.prices.length>=MIN_TICKS)
-    .map(x=>({m:x,s:{...signalForMarket(x),symbol:x.symbol,market:x.name}}))
+    .flatMap(m=>families.map(family=>({m,s:{...signalForFamily(m,family),symbol:m.symbol,market:m.name}})))
     .filter(x=>x.s.eligible&&x.s.pick!=='NO EDGE'&&Number(x.s.score)>=minScore)
     .sort((a,b)=>Number(b.s.score)-Number(a.s.score)||Number(b.s.edge||0)-Number(a.s.edge||0)||Number(b.s.n||0)-Number(a.s.n||0));
   const top=ranked[0];
