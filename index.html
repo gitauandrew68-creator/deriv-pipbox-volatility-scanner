@@ -549,7 +549,7 @@ function validateTradeRisk(){
 }
 async function executeSignal(signal,source='manual'){
   if(!tradeArmed)throw new Error('Execution is disarmed. Press Connect account & arm execution first.');
-  if(!signal||!signal.eligible||!signal.symbol||!signal.pick)throw new Error('No fresh strong signal passed the selected family's evidence checks. The scanner will wait for the next top-ranked valid setup; no weak order was sent.');
+  if(!signal||!signal.eligible||!signal.symbol||!signal.pick)throw new Error("No fresh strong signal passed the selected family's evidence checks. The scanner will wait for the next top-ranked valid setup; no weak order was sent.");
   if(tradeBusy)throw new Error('An order request is already in progress.');
   const risk=validateTradeRisk(),account=selectedTradeAccount(),mode=tradeMode();
   if(!account)throw new Error('Select an authorized account first.');
@@ -751,7 +751,7 @@ $('armTradeBtn').addEventListener('click',armTrading);$('manualTradeBtn').addEve
 const resumeScanAfterOAuth=(()=>{const q=new URLSearchParams(location.search);return q.has('oauth_callback')||q.has('auth_error');})();
 renderAll();refreshAuth();renderTradeAccounts();updateTradeMetrics();
 $('refreshBalanceBtn').addEventListener('click',async()=>{const btn=$('refreshBalanceBtn');btn.disabled=true;$('balanceRefreshStatus').textContent='Refreshing balances from Deriv…';try{await refreshAuth();$('balanceRefreshStatus').textContent='Balance refresh request completed.';}catch(err){$('balanceRefreshStatus').textContent='Balance refresh failed: '+err.message;}finally{btn.disabled=false;}});
-if(resumeScanAfterOAuth){setTimeout(()=>{if(!running)startScan();},250);}
+setTimeout(()=>{if(!running)startScan();},350);
 log('Build V2.3-TOP-SIGNAL loaded: choose one family or ALL; AUTO queues only the highest-ranked qualified setup in the selected scope; trading remains disarmed until explicitly armed.');
 </script>
 </body></html>
