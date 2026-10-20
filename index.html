@@ -120,7 +120,7 @@ let renderTimer=null;
 let tradeSocket=null, tradeSocketKey='', tradeReqId=5000, tradeRequests=new Map();
 let tradeArmed=false, tradeBusy=false, currentSignal=null, tradeAccounts=[];
 let tradeOrdersCount=0, tradeSessionPnL=0, tradeLossStreakCount=0;
-let autoMatchedPaperSession=false;
+let liveMatchedPaperSession=false;
 let closedContractIds=new Set(), autoCooldowns=new Map(), lastAutoOrderAt=0;
 let autoOrderQueue=[], autoQueueRunning=false, autoQueuedKeys=new Set();
 let activeContracts=new Map();
@@ -320,13 +320,23 @@ function renderSignals(){
   $('signalsTable').innerHTML=rows.length?`<table><thead><tr><th>Market</th><th>Contract</th><th>Family</th><th>Score</th><th>Grade</th><th>Sample transitions</th><th>Reason / edge</th></tr></thead><tbody>${rows.map(({m,s})=>`<tr><td>${esc(m.name)}</td><td><b>${esc(s.pick)}</b></td><td>${familyName(s.family)}</td><td>${s.score}</td><td class="${s.eligible?'green':'yellow'}">${s.quality}</td><td>${s.n||0}</td><td>${esc((s.reasons||[]).slice(0,2).join('; '))}</td></tr>`).join('')}</tbody></table>`:'<div class="smallmuted" style="padding:10px">Waiting for enough data to rank setups.</div>';
 }
 function renderPaper(){
-  const wins=paper.filter(x=>x.result==='WIN').length,losses=paper.filter(x=>x.result==='LOSS').length,total=wins+losses;
-  $('pendingKpi').textContent=String(pending.length);$('resolvedKpi').textContent=String(total);$('rateKpi').textContent=total?`${(wins/total*100).toFixed(1)}%`:'—';
-  const matchedResolved=paper.filter(x=>x.matchedAuto).length;
-  const matchedPending=pending.filter(x=>x.matchedAuto).length;
-  $('paperSummary').textContent=`${wins} wins · ${losses} losses · ${pending.length} unresolved · ${total?`${(wins/total*100).toFixed(1)}% observed win rate`:'no resolved sample yet'}${autoMatchedPaperSession?` · AUTO-matched: ${matchedResolved} resolved / ${matchedPending} pending`:''}`;
-  const rows=paper.slice(-100).reverse();
-  $('paperTable').innerHTML=rows.length?`<table><thead><tr><th>Time</th><th>Market</th><th>Family</th><th>Pick</th><th>Score</th><th>Source</th><th>Entry price</th><th>Exit price</th><th>Result</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.time)}</td><td>${esc(x.market)}</td><td>${familyName(x.family)}</td><td><b>${esc(x.pick)}</b></td><td>${Number.isFinite(x.score)?x.score:'—'}</td><td>${x.matchedAuto?'AUTO accepted':'Paper only'}</td><td>${esc(x.entryPriceText)}</td><td>${esc(x.exitPriceText)}</td><td class="${x.result==='WIN'?'green':'red'}"><b>${x.result}</b></td></tr>`).join('')}</tbody></table>`:'<div class="smallmuted" style="padding:10px">Verification rows appear after qualified signals reach their tick horizon. In AUTO mode, matched rows are added only after Deriv confirms the corresponding buy.</div>';
+  // Once execution has accepted any live order, show only rows linked to actual
+  // Deriv contract IDs. Entry/exit spots and the final result come from Deriv.
+  const visiblePaper=liveMatchedPaperSession?paper.filter(x=>x.liveMirror):paper;
+  const openLive=pending.filter(x=>x.liveMirror).map(x=>({...x,time:new Date(x.created).toLocaleTimeString(),result:'OPEN'}));
+  const wins=visiblePaper.filter(x=>x.result==='WIN').length;
+  const losses=visiblePaper.filter(x=>x.result==='LOSS').length;
+  const voids=visiblePaper.filter(x=>x.result==='VOID').length;
+  const total=wins+losses;
+  const pendingCount=liveMatchedPaperSession?openLive.length:pending.filter(x=>!x.liveMirror).length;
+  $('pendingKpi').textContent=String(pendingCount);
+  $('resolvedKpi').textContent=String(total);
+  $('rateKpi').textContent=total?`${(wins/total*100).toFixed(1)}%`:'—';
+  $('paperSummary').textContent=liveMatchedPaperSession
+    ? `${wins} wins · ${losses} losses${voids?` · ${voids} void`:''} · ${openLive.length} live contracts open · ${total?`${(wins/total*100).toFixed(1)}% observed contract win rate`:'waiting for first settlement'} · entry/exit from Deriv`
+    : `${wins} wins · ${losses} losses · ${pendingCount} unresolved paper checks · ${total?`${(wins/total*100).toFixed(1)}% simulated win rate`:'no resolved sample yet'} · no live orders mirrored yet`;
+  const rows=[...openLive.reverse(),...visiblePaper.slice(-100).reverse()];
+  $('paperTable').innerHTML=rows.length?`<table><thead><tr><th>Time</th><th>Market</th><th>Family</th><th>Pick</th><th>Score</th><th>Execution</th><th>Entry spot</th><th>Exit spot</th><th>Result</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.time)}</td><td>${esc(x.market)}</td><td>${familyName(x.family)}</td><td><b>${esc(x.pick)}</b></td><td>${Number.isFinite(x.score)?x.score:'—'}</td><td>${x.liveMirror?`${String(x.mode||'').toUpperCase()} ${String(x.executionSource||'').toUpperCase()} · Deriv`:'Paper only'}</td><td>${esc(x.entryPriceText||'—')}</td><td>${esc(x.exitPriceText||'—')}</td><td class="${x.result==='WIN'?'green':x.result==='LOSS'?'red':'yellow'}"><b>${esc(x.result)}</b></td></tr>`).join('')}</tbody></table>`:'<div class="smallmuted" style="padding:10px">Rows in paper-only mode use simulated ticks. After a Demo/Real order is accepted, verification rows mirror that contract ID and use Deriv's entry spot, exit spot, and final outcome.</div>';
 }
 function renderAll(){renderMarkets();renderPrediction();renderMesh();renderSignals();renderPaper();}
 function maybeSchedulePaper(m,s){
@@ -336,7 +346,7 @@ function maybeSchedulePaper(m,s){
   // After this page has accepted an AUTO buy, keep samples matched while AUTO is
   // selected—even after the session cap disarms it—rather than letting paper
   // checks continue past the configured live-order limit.
-  if($('executionStyle').value==='auto'&&(tradeArmed||autoMatchedPaperSession))return;
+  if(tradeArmed||liveMatchedPaperSession)return;
   // Paper-only mode uses the same cross-family qualified ranking and 75 score floor.
   const ranked=rankedFamilySignals({eligibleOnly:true,minScore:75});
   const top=ranked[0];
@@ -351,24 +361,59 @@ function maybeSchedulePaper(m,s){
   log(`Top-signal paper check queued: ${m.name} ${s.pick} · score ${s.score}/100 · ${s.horizon} tick(s).`);
   renderPaper();
 }
-function scheduleMatchedAutoPaper(signal){
-  if(!running)return;
-  const m=markets.get(signal.symbol);
-  if(!m||!m.connected||!m.prices.length||!Number.isInteger(m.digits.at(-1))) {
-    log(`AUTO buy accepted for ${signal.market}, but there is no current tick to create its paired verification check.`);
+function scheduleMatchedLivePaper(signal,contractId,bought,source,mode,stake){
+  if(!contractId)return;
+  // Link to the accepted contract, not a later public-scanner tick.
+  if(!liveMatchedPaperSession){
+    liveMatchedPaperSession=true;
+    pending=pending.filter(x=>x.liveMirror);
+  }
+  const horizon=Math.max(1,Math.round(Number(signal.horizon)||1));
+  const pos={
+    contractId:String(contractId),symbol:signal.symbol,market:signal.market,
+    family:signal.family,pick:signal.pick,score:signal.score,horizon,
+    entryIndex:-1,targetIndex:-1,entryPrice:null,
+    entryPriceText:(bought?.entry_spot!==undefined&&bought?.entry_spot!==null)?String(bought.entry_spot):'Waiting for Deriv entry spot…',
+    exitPriceText:(bought?.exit_spot!==undefined&&bought?.exit_spot!==null)?String(bought.exit_spot):'—',
+    entryDigit:null,barrier:Number(signal.pick.split(' ').at(-1)),created:Date.now(),
+    liveMirror:true,executionSource:source,mode,
+    buyPriceText:bought?.buy_price!==undefined?String(bought.buy_price):String(stake),
+    stake:Number(stake),contractStatus:'OPEN'
+  };
+  pending.push(pos);
+  log(`Deriv-matched verification linked to accepted contract ${contractId}: ${signal.market} ${signal.pick}. Waiting for actual entry/exit spots and settlement.`);
+  renderPaper();
+}
+function updateLivePaperFromContract(c){
+  const id=String(c?.contract_id||'');if(!id)return;
+  const index=pending.findIndex(x=>x.liveMirror&&x.contractId===id);
+  if(index<0)return;
+  const pos=pending[index],oldEntry=pos.entryPriceText,oldExit=pos.exitPriceText,oldStatus=pos.contractStatus;
+  // Use Deriv's actual spot fields. The tick fields are only a documented
+  // fallback when a response doesn't include a spot field.
+  if(c.entry_spot!==undefined&&c.entry_spot!==null&&String(c.entry_spot)!=='')pos.entryPriceText=String(c.entry_spot);
+  else if(c.entry_tick!==undefined&&c.entry_tick!==null&&String(c.entry_tick)!=='')pos.entryPriceText=String(c.entry_tick);
+  if(c.exit_spot!==undefined&&c.exit_spot!==null&&String(c.exit_spot)!=='')pos.exitPriceText=String(c.exit_spot);
+  else if(c.exit_tick!==undefined&&c.exit_tick!==null&&String(c.exit_tick)!=='')pos.exitPriceText=String(c.exit_tick);
+  if(c.status!==undefined&&c.status!==null)pos.contractStatus=String(c.status);
+  if(c.buy_price!==undefined&&c.buy_price!==null)pos.buyPriceText=String(c.buy_price);
+  if(c.sell_price!==undefined&&c.sell_price!==null)pos.sellPriceText=String(c.sell_price);
+  if(Number(c.is_sold)!==1){
+    if(oldEntry!==pos.entryPriceText||oldExit!==pos.exitPriceText||oldStatus!==pos.contractStatus)renderPaper();
     return;
   }
-  const entryIndex=m.prices.length-1;
-  const horizon=Math.max(1,Math.round(Number(signal.horizon)||1));
-  const barrier=Number(signal.pick.split(' ').at(-1));
-  pending.push({
-    symbol:m.symbol,market:m.name,family:signal.family,pick:signal.pick,score:signal.score,
-    horizon,entryIndex,targetIndex:entryIndex+horizon,entryPrice:m.prices[entryIndex],
-    entryPriceText:m.quoteTexts.at(-1)||String(m.prices[entryIndex]),entryDigit:m.digits.at(-1),
-    barrier,created:Date.now(),matchedAuto:true
-  });
-  autoMatchedPaperSession=true;
-  log(`AUTO-matched verification queued after Deriv accepted the buy: ${m.name} ${signal.pick} · score ${signal.score}/100 · ${horizon} tick(s).`);
+  pending.splice(index,1);
+  const profit=Number(c.profit),status=String(c.status||'').toLowerCase();
+  const result=status==='won'?'WIN':status==='lost'?'LOSS':profit>0?'WIN':profit<0?'LOSS':'VOID';
+  const row={
+    ...pos,time:new Date().toLocaleTimeString(),result,
+    entryPriceText:pos.entryPriceText||'—',exitPriceText:pos.exitPriceText||'—',
+    liveMirror:true,actualProfit:Number.isFinite(profit)?profit:null,
+    buyPriceText:c.buy_price!==undefined?String(c.buy_price):pos.buyPriceText,
+    sellPriceText:c.sell_price!==undefined?String(c.sell_price):pos.sellPriceText
+  };
+  paper.push(row);if(paper.length>500)paper=paper.slice(-500);
+  log(`Deriv contract ${id} mirrored to verification: ${result} · entry spot ${row.entryPriceText} · exit spot ${row.exitPriceText} · P/L ${Number.isFinite(profit)?profit.toFixed(2):'unavailable'}.`);
   renderPaper();
 }
 function resolvesPosition(pos,m){
@@ -382,7 +427,14 @@ function resolvesPosition(pos,m){
 }
 function resolvePending(m){
   const still=[];
-  for(const pos of pending){if(pos.symbol!==m.symbol||m.prices.length-1<pos.targetIndex){still.push(pos);continue;}const resolved=resolvesPosition(pos,m);if(resolved){paper.push(resolved);log(`Paper ${resolved.result}: ${resolved.market} ${resolved.pick} after ${resolved.horizon} tick(s).`);}else{still.push(pos);}}
+  for(const pos of pending){
+    // A Demo/Real contract must settle from Deriv's contract stream, not from
+    // an estimated local tick horizon. Only paper-only positions use this path.
+    if(pos.liveMirror||pos.symbol!==m.symbol||m.prices.length-1<pos.targetIndex){still.push(pos);continue;}
+    const resolved=resolvesPosition(pos,m);
+    if(resolved){paper.push(resolved);log(`Paper ${resolved.result}: ${resolved.market} ${resolved.pick} after ${resolved.horizon} tick(s).`);}
+    else still.push(pos);
+  }
   pending=still;if(paper.length>500)paper=paper.slice(-500);renderPaper();
 }
 function publicErrorMessage(d){return d?.error?.message||d?.errors?.[0]?.message||d?.message||'Unknown Deriv API error';}
@@ -472,9 +524,13 @@ function startScan(){
 }
 function stopScan(){
   running=false;$('startBtn').disabled=false;$('stopBtn').disabled=true;clearTimeout(reconnectTimer);clearInterval(pingTimer);historyReqs.clear();
-  const dropped=pending.length;pending=[];if(ws){const old=ws;ws=null;try{old.close();}catch{}}
+  const livePending=pending.filter(x=>x.liveMirror),dropped=pending.filter(x=>!x.liveMirror).length;
+  pending=livePending;
+  if(ws){const old=ws;ws=null;try{old.close();}catch{}}
   disarmTrading('Scanner stopped; new orders are paused.');
-  setConnection(false);setStatus(`Scanner stopped. ${dropped} unresolved paper check(s) were cancelled and not counted.`);if(dropped)log(`Cancelled ${dropped} unresolved paper check(s); they were not counted as wins or losses.`);log('Scanner stopped.');renderPaper();
+  setConnection(false);setStatus(`Scanner stopped. ${dropped} unresolved simulated paper check(s) were cancelled; ${livePending.length} Deriv-linked contract(s) remain tracked.`);
+  if(dropped)log(`Cancelled ${dropped} unresolved simulated paper check(s); live Deriv contracts were kept for settlement.`);
+  log('Scanner stopped.');renderPaper();
 }
 function setTradeStatus(text){$('tradeStatus').textContent=text;}
 function showTradeError(text){$('tradeError').textContent=text;$('tradeError').classList.remove('hidden');}
@@ -576,11 +632,19 @@ function handleTradeMessage(socket,event){
   const type=d.msg_type||d.type||d.data?.msg_type,reqIdValue=d.req_id;
   if(d.error||d.errors?.length){const message=apiError(d);if(reqIdValue&&tradeRequests.has(reqIdValue)){const pendingReq=tradeRequests.get(reqIdValue);clearTimeout(pendingReq.timer);tradeRequests.delete(reqIdValue);pendingReq.reject(new Error(message));}else log(`Deriv trading update: ${message}`);return;}
   if(reqIdValue&&tradeRequests.has(reqIdValue)){const pendingReq=tradeRequests.get(reqIdValue);clearTimeout(pendingReq.timer);tradeRequests.delete(reqIdValue);pendingReq.resolve(d);}
-  if(type==='proposal_open_contract'||d.proposal_open_contract)handleContractUpdate(d.proposal_open_contract||d.data?.proposal_open_contract||d);
+  if(type==='proposal_open_contract'||d.proposal_open_contract){
+    const contract=d.proposal_open_contract||d.data?.proposal_open_contract||d;
+    handleContractUpdate(contract);
+    if(Number(contract.is_sold)===1&&d.subscription?.id&&socket.readyState===WebSocket.OPEN){
+      try{socket.send(JSON.stringify({forget:d.subscription.id,req_id:tradeReqId++}));}catch{}
+    }
+  }
   if(type==='buy'&&d.buy?.contract_id)log(`Deriv accepted buy request; contract ${d.buy.contract_id}.`);
 }
 function handleContractUpdate(c){
-  if(!c||Number(c.is_sold)!==1)return;
+  if(!c)return;
+  updateLivePaperFromContract(c);
+  if(Number(c.is_sold)!==1)return;
   const id=String(c.contract_id||'');if(!id||closedContractIds.has(id))return;
   closedContractIds.add(id);activeContracts.delete(id);
   const profit=Number(c.profit);if(Number.isFinite(profit))tradeSessionPnL+=profit;
@@ -588,7 +652,6 @@ function handleContractUpdate(c){
   const currency=selectedTradeAccount()?.currency||'account currency';
   log(`Contract ${id} settled: ${Number.isFinite(profit)?profit.toFixed(2):'P/L unavailable'} ${currency}. Session P/L ${tradeSessionPnL.toFixed(2)}.`);
   updateTradeMetrics();
-  // Refresh API balances after a settlement; do not infer a balance from session P/L.
   refreshAuth().catch(err=>log(`Balance refresh after settlement failed: ${err.message}`));
   const maxLoss=Number($('tradeLossLimit').value),maxStreak=Math.max(1,Math.min(10,Number($('tradeLossStreak').value)||3));
   if(tradeSessionPnL<=-Math.abs(maxLoss)||tradeLossStreakCount>=maxStreak){$('executionStyle').value='manual';disarmTrading(tradeSessionPnL<=-Math.abs(maxLoss)?'Session loss limit reached; new orders stopped.':'Consecutive-loss stop reached; new orders stopped.');showTradeError('Risk limit reached. Review results before arming execution again.');}
@@ -655,7 +718,7 @@ async function executeSignal(signal,source='manual'){
       log(`BUY ACCEPTED · ${mode.toUpperCase()} · ${signal.market} · ${signal.pick} · stake ${risk.stake} ${account.currency||'USD'} · contract ${id}`);
       setTradeStatus(`Order accepted by Deriv. Contract ${id} · ${signal.pick} · stake ${risk.stake} ${account.currency||'USD'}.`);
       // Only a buy confirmed by Deriv can generate a matched verification sample.
-      scheduleMatchedAutoPaper(signal);
+      scheduleMatchedLivePaper(signal,id,bought,source,mode,risk.stake);
       const subReq={proposal_open_contract:1,contract_id:Number(id),subscribe:1,req_id:tradeReqId++};
       try{tradeSocket.send(JSON.stringify(subReq));}catch(err){log(`Contract ${id} bought, but status subscription failed: ${err.message}. Check the Deriv portfolio.`);}
       if(mode==='real')$('tradeBadge').className='badge bad';
@@ -685,6 +748,7 @@ async function executeSignal(signal,source='manual'){
     const id=String(bought.contract_id);activeContracts.set(id,{signal,source,stake:askPrice});tradeOrdersCount++;updateTradeMetrics();
     log(`BUY ACCEPTED · ${mode.toUpperCase()} · ${signal.market} · ${signal.pick} · stake ${askPrice} ${account.currency||'USD'} · contract ${id}`);
     setTradeStatus(`Order accepted by Deriv. Contract ${id} · ${signal.pick} · ${askPrice} ${account.currency||'USD'}.`);
+    scheduleMatchedLivePaper(signal,id,bought,source,mode,askPrice);
     const subReq={proposal_open_contract:1,contract_id:Number(id),subscribe:1,req_id:tradeReqId++};
     try{tradeSocket.send(JSON.stringify(subReq));}catch(err){log(`Contract ${id} bought, but status subscription failed: ${err.message}. Check the Deriv portfolio.`);}
     if(tradeMode()==='real')$('tradeBadge').className='badge bad';
