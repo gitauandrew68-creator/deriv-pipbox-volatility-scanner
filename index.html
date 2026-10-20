@@ -331,12 +331,12 @@ function renderPaper(){
   $('resolvedKpi').textContent=String(total);
   $('rateKpi').textContent=total?((wins/total*100).toFixed(1)+'%'):'—';
   if(liveMatchedPaperSession){
-    $('paperSummary').textContent=wins+' wins · '+losses+' losses'+(voids?' · '+voids+' void':'')+' · '+openLive.length+' live contracts open · '+(total?((wins/total*100).toFixed(1)+'% observed contract win rate'):'waiting for first settlement')+' · entry/exit from Deriv';
+    $('paperSummary').textContent=wins+' wins · '+losses+' losses'+(voids?' · '+voids+' void':'')+' · '+openLive.length+' live contracts open · '+(total?((wins/total*100).toFixed(1)+'% observed contract win rate'):'waiting for first settlement')+' · entry/exit tick/spot from Deriv';
   }else{
     $('paperSummary').textContent=wins+' wins · '+losses+' losses · '+pendingCount+' unresolved paper checks · '+(total?((wins/total*100).toFixed(1)+'% simulated win rate'):'no resolved sample yet')+' · no live orders mirrored yet';
   }
   const rows=[...openLive.reverse(),...visiblePaper.slice(-100).reverse()];
-  $('paperTable').innerHTML=rows.length?`<table><thead><tr><th>Time</th><th>Market</th><th>Family</th><th>Pick</th><th>Score</th><th>Execution</th><th>Entry spot</th><th>Exit spot</th><th>Result</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.time)}</td><td>${esc(x.market)}</td><td>${familyName(x.family)}</td><td><b>${esc(x.pick)}</b></td><td>${Number.isFinite(x.score)?x.score:'—'}</td><td>${x.liveMirror?(String(x.mode||'').toUpperCase()+' '+String(x.executionSource||'').toUpperCase()+' · Deriv'):'Paper only'}</td><td>${esc(x.entryPriceText||'—')}</td><td>${esc(x.exitPriceText||'—')}</td><td class="${x.result==='WIN'?'green':x.result==='LOSS'?'red':'yellow'}"><b>${esc(x.result)}</b></td></tr>`).join('')}</tbody></table>`:'<div class="smallmuted" style="padding:10px">Paper-only rows use simulated ticks. After a Demo/Real order is accepted, the verification table mirrors that contract ID and uses Deriv entry spot, exit spot, and final result.</div>';
+  $('paperTable').innerHTML=rows.length?`<table><thead><tr><th>Time</th><th>Market</th><th>Family</th><th>Pick</th><th>Score</th><th>Execution</th><th>Entry tick / spot</th><th>Exit tick / spot</th><th>Result</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.time)}</td><td>${esc(x.market)}</td><td>${familyName(x.family)}</td><td><b>${esc(x.pick)}</b></td><td>${Number.isFinite(x.score)?x.score:'—'}</td><td>${x.liveMirror?(String(x.mode||'').toUpperCase()+' '+String(x.executionSource||'').toUpperCase()+' · Deriv'):'Paper only'}</td><td>${esc(x.entryPriceText||'—')}</td><td>${esc(x.exitPriceText||'—')}</td><td class="${x.result==='WIN'?'green':x.result==='LOSS'?'red':'yellow'}"><b>${esc(x.result)}</b></td></tr>`).join('')}</tbody></table>`:'<div class="smallmuted" style="padding:10px">Paper-only rows use simulated ticks. After a Demo/Real order is accepted, the verification table mirrors that contract ID and uses Deriv entry/exit tick or spot values and final result.</div>';
 }
 function renderAll(){renderMarkets();renderPrediction();renderMesh();renderSignals();renderPaper();}
 function maybeSchedulePaper(m,s){
@@ -361,6 +361,11 @@ function maybeSchedulePaper(m,s){
   log(`Top-signal paper check queued: ${m.name} ${s.pick} · score ${s.score}/100 · ${s.horizon} tick(s).`);
   renderPaper();
 }
+function liveContractPrice(c,side){
+  const keys=side==='entry'?['entry_tick_display_value','entry_tick','entry_spot']:['exit_tick_display_value','exit_tick','exit_spot'];
+  for(const key of keys){const value=c?.[key];if((typeof value==='string'||typeof value==='number')&&String(value).trim()!=='')return String(value);}
+  return null;
+}
 function scheduleMatchedLivePaper(signal,contractId,bought,source,mode,stake){
   if(!contractId)return;
   // Link to the accepted contract, not a later public-scanner tick.
@@ -373,15 +378,15 @@ function scheduleMatchedLivePaper(signal,contractId,bought,source,mode,stake){
     contractId:String(contractId),symbol:signal.symbol,market:signal.market,
     family:signal.family,pick:signal.pick,score:signal.score,horizon,
     entryIndex:-1,targetIndex:-1,entryPrice:null,
-    entryPriceText:(bought?.entry_spot!==undefined&&bought?.entry_spot!==null)?String(bought.entry_spot):'Waiting for Deriv entry spot…',
-    exitPriceText:(bought?.exit_spot!==undefined&&bought?.exit_spot!==null)?String(bought.exit_spot):'—',
+    entryPriceText:liveContractPrice(bought,'entry')||'Waiting for Deriv entry tick/spot…',
+    exitPriceText:liveContractPrice(bought,'exit')||'—',
     entryDigit:null,barrier:Number(signal.pick.split(' ').at(-1)),created:Date.now(),
     liveMirror:true,executionSource:source,mode,
     buyPriceText:bought?.buy_price!==undefined?String(bought.buy_price):String(stake),
     stake:Number(stake),contractStatus:'OPEN'
   };
   pending.push(pos);
-  log(`Deriv-matched verification linked to accepted contract ${contractId}: ${signal.market} ${signal.pick}. Waiting for actual entry/exit spots and settlement.`);
+  log(`Deriv-matched verification linked to accepted contract ${contractId}: ${signal.market} ${signal.pick}. Waiting for Deriv entry/exit tick/spot values and settlement.`);
   renderPaper();
 }
 function updateLivePaperFromContract(c){
@@ -410,7 +415,7 @@ function updateLivePaperFromContract(c){
     sellPriceText:c.sell_price!==undefined?String(c.sell_price):pos.sellPriceText
   };
   paper.push(row);if(paper.length>500)paper=paper.slice(-500);
-  log(`Deriv contract ${id} mirrored to verification: ${result} · entry spot ${row.entryPriceText} · exit spot ${row.exitPriceText} · P/L ${Number.isFinite(profit)?profit.toFixed(2):'unavailable'}.`);
+  log(`Deriv contract ${id} mirrored to verification: ${result} · entry tick/spot ${row.entryPriceText} · exit tick/spot ${row.exitPriceText} · P/L ${Number.isFinite(profit)?profit.toFixed(2):'unavailable'}.`);
   renderPaper();
 }
 function resolvesPosition(pos,m){
