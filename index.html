@@ -294,16 +294,30 @@ function renderPaper(){
   $('pendingKpi').textContent=String(pending.length);$('resolvedKpi').textContent=String(total);$('rateKpi').textContent=total?`${(wins/total*100).toFixed(1)}%`:'—';
   $('paperSummary').textContent=`${wins} wins · ${losses} losses · ${pending.length} unresolved · ${total?`${(wins/total*100).toFixed(1)}% observed win rate`:'no resolved sample yet'}`;
   const rows=paper.slice(-100).reverse();
-  $('paperTable').innerHTML=rows.length?`<table><thead><tr><th>Time</th><th>Market</th><th>Family</th><th>Pick</th><th>Entry price</th><th>Exit price</th><th>Result</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.time)}</td><td>${esc(x.market)}</td><td>${familyName(x.family)}</td><td><b>${esc(x.pick)}</b></td><td>${esc(x.entryPriceText)}</td><td>${esc(x.exitPriceText)}</td><td class="${x.result==='WIN'?'green':'red'}"><b>${x.result}</b></td></tr>`).join('')}</tbody></table>`:'<div class="smallmuted" style="padding:10px">Paper results will appear after a qualified signal reaches its exact tick horizon.</div>';
+  $('paperTable').innerHTML=rows.length?`<table><thead><tr><th>Time</th><th>Market</th><th>Family</th><th>Pick</th><th>Score</th><th>Entry price</th><th>Exit price</th><th>Result</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.time)}</td><td>${esc(x.market)}</td><td>${familyName(x.family)}</td><td><b>${esc(x.pick)}</b></td><td>${Number.isFinite(x.score)?x.score:'—'}</td><td>${esc(x.entryPriceText)}</td><td>${esc(x.exitPriceText)}</td><td class="${x.result==='WIN'?'green':'red'}"><b>${x.result}</b></td></tr>`).join('')}</tbody></table>`:'<div class="smallmuted" style="padding:10px">Paper results will appear after a qualified signal reaches its exact tick horizon.</div>';
 }
 function renderAll(){renderMarkets();renderPrediction();renderMesh();renderSignals();renderPaper();}
 function maybeSchedulePaper(m,s){
-  if(!running||!s.eligible||s.pick==='NO EDGE')return;
+  if(!running)return;
+  // Paper win rate must follow the same global top-signal gate as AUTO.
+  // Previously it counted every market's locally eligible setup, including
+  // lower-ranked signals that AUTO would never queue (score floor is 75).
+  const minScore=75;
+  const ranked=[...markets.values()]
+    .filter(x=>x.connected&&x.prices.length>=MIN_TICKS)
+    .map(x=>({m:x,s:{...signalForMarket(x),symbol:x.symbol,market:x.name}}))
+    .filter(x=>x.s.eligible&&x.s.pick!=='NO EDGE'&&Number(x.s.score)>=minScore)
+    .sort((a,b)=>Number(b.s.score)-Number(a.s.score)||Number(b.s.edge||0)-Number(a.s.edge||0)||Number(b.s.n||0)-Number(a.s.n||0));
+  const top=ranked[0];
+  if(!top||top.m.symbol!==m.symbol)return;
+  s=top.s;
   const entryIndex=m.prices.length-1,key=`${m.symbol}|${s.family}`;
   const nextAllowed=signalLocks.get(key)||-1;if(entryIndex<nextAllowed)return;
-  // Lock until the forecast horizon plus a small cool-down to avoid repeated overlapping samples.
-  signalLocks.set(key,entryIndex+s.horizon+4);
-  pending.push({symbol:m.symbol,market:m.name,family:s.family,pick:s.pick,horizon:s.horizon,entryIndex,targetIndex:entryIndex+s.horizon,entryPrice:m.prices[entryIndex],entryPriceText:m.quoteTexts.at(-1)||String(m.prices[entryIndex]),entryDigit:m.digits.at(-1),barrier:Number(s.pick.split(' ').at(-1)),created:Date.now()});
+  // Keep a small cooldown for the same market/family, matching the AUTO queue's
+  // intent to prevent overlapping duplicate checks on each tick.
+  signalLocks.set(key,entryIndex+Math.max(5,Number(s.horizon)||1)+4);
+  pending.push({symbol:m.symbol,market:m.name,family:s.family,pick:s.pick,score:s.score,horizon:s.horizon,entryIndex,targetIndex:entryIndex+s.horizon,entryPrice:m.prices[entryIndex],entryPriceText:m.quoteTexts.at(-1)||String(m.prices[entryIndex]),entryDigit:m.digits.at(-1),barrier:Number(s.pick.split(' ').at(-1)),created:Date.now()});
+  log(`Top-signal paper check queued: ${m.name} ${s.pick} · score ${s.score}/100 · ${s.horizon} tick(s).`);
   renderPaper();
 }
 function resolvesPosition(pos,m){
@@ -313,7 +327,7 @@ function resolvesPosition(pos,m){
   else if(pos.family==='EO')win=(digit%2===0)===(pos.pick==='EVEN');
   else if(pos.family==='MT')win=digit===pos.barrier;
   else if(pos.family==='OU')win=pos.pick.startsWith('OVER')?digit>pos.barrier:digit<pos.barrier;
-  return {time:new Date().toLocaleTimeString(),market:pos.market,symbol:pos.symbol,family:pos.family,pick:pos.pick,entryPriceText:pos.entryPriceText,exitPriceText:m.quoteTexts[i]||String(exit),result:win?'WIN':'LOSS',horizon:pos.horizon};
+  return {time:new Date().toLocaleTimeString(),market:pos.market,symbol:pos.symbol,family:pos.family,pick:pos.pick,score:pos.score,entryPriceText:pos.entryPriceText,exitPriceText:m.quoteTexts[i]||String(exit),result:win?'WIN':'LOSS',horizon:pos.horizon};
 }
 function resolvePending(m){
   const still=[];
