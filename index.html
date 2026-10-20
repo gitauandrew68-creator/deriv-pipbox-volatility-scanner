@@ -580,9 +580,42 @@ async function executeSignal(signal,source='manual'){
   tradeBusy=true;updateTradeMetrics();clearTradeError();
   try{
     await ensureTradeSocket();
+
+    // AUTO queues can become stale while another order is resolving. Check the
+    // current global winner before sending anything; never buy an old queued pick.
+    if(source==='auto'){
+      const liveTop=rankedFamilySignals({eligibleOnly:true,minScore:75})[0];
+      if(!liveTop||liveTop.m.symbol!==signal.symbol||liveTop.s.family!==signal.family||liveTop.s.pick!==signal.pick){
+        throw new Error('Queued AUTO signal is stale; it no longer matches the top qualified setup. No order sent.');
+      }
+      signal={...liveTop.s,symbol:liveTop.m.symbol,market:liveTop.m.name};
+    }
+
     const mapped=contractFromSignal(signal);
     const proposalRequest={proposal:1,amount:risk.stake,basis:'stake',contract_type:mapped.contract_type,currency:String(account.currency||'USD').toUpperCase(),duration:Math.max(1,Math.min(1000,Math.round(Number(signal.horizon)||1))),duration_unit:'t',underlying_symbol:signal.symbol};
     if(mapped.barrier!==undefined)proposalRequest.barrier=String(mapped.barrier);
+
+    // The official Options API supports buying directly with contract parameters.
+    // AUTO uses one capped buy request instead of waiting for a proposal response
+    // and then issuing a second request. Manual mode keeps proposal + confirmation.
+    if(source==='auto'){
+      const purchaseParameters={...proposalRequest};
+      delete purchaseParameters.proposal;
+      setTradeStatus(`Sending fresh AUTO order for ${signal.pick} on ${signal.market} (${mode.toUpperCase()})…`);
+      const bResponse=await tradeCall({buy:'1',parameters:purchaseParameters,price:risk.cap});
+      const bought=bResponse.buy||bResponse.data?.buy;
+      if(!bought?.contract_id)throw new Error('Deriv did not confirm a contract ID. Check Deriv transactions before retrying; no automatic retry was sent.');
+      const id=String(bought.contract_id);
+      activeContracts.set(id,{signal,source,stake:risk.stake});
+      tradeOrdersCount++;updateTradeMetrics();
+      log(`BUY ACCEPTED · ${mode.toUpperCase()} · ${signal.market} · ${signal.pick} · stake ${risk.stake} ${account.currency||'USD'} · contract ${id}`);
+      setTradeStatus(`Order accepted by Deriv. Contract ${id} · ${signal.pick} · stake ${risk.stake} ${account.currency||'USD'}.`);
+      const subReq={proposal_open_contract:1,contract_id:Number(id),subscribe:1,req_id:tradeReqId++};
+      try{tradeSocket.send(JSON.stringify(subReq));}catch(err){log(`Contract ${id} bought, but status subscription failed: ${err.message}. Check the Deriv portfolio.`);}
+      if(mode==='real')$('tradeBadge').className='badge bad';
+      return;
+    }
+
     setTradeStatus(`Requesting a price for ${signal.pick} on ${signal.market} (${mode.toUpperCase()})…`);
     const pResponse=await tradeCall(proposalRequest);
     const proposal=pResponse.proposal||pResponse.data?.proposal;
