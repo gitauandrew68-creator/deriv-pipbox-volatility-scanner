@@ -102,7 +102,7 @@
 'use strict';
 // Use only Deriv's documented public Options WebSocket for market data.
 // Do not rotate across legacy hosts after a security/handshake failure.
-// Signal selection, scoring thresholds and digit-mesh calculations are unchanged.
+// Matches now requires market-local transition evidence, with the shared mesh used only as a prior; other families keep their existing gates.
 const MARKET_WS_BASES = [
   {url:'wss://api.derivws.com/trading/v1/options/ws/public', label:'Deriv public Options API', legacy:false}
 ];
