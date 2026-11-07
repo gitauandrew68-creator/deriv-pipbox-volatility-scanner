@@ -109,12 +109,16 @@ const MARKET_WS_BASES = [
 let marketWsIndex = 0;
 function marketWsUrl(){ return MARKET_WS_BASES[0].url; }
 const MAX_MARKETS = 32;
-const HISTORY_COUNT = 120;
+const HISTORY_COUNT = 360;
 const MIN_TICKS = 35;
+const MESH_WINDOW_SIZE = 60;
+const MESH_WINDOW_COUNT = 5;
+const MESH_LOOKBACK = MESH_WINDOW_SIZE * MESH_WINDOW_COUNT;
 let ws = null, running = false, reqId = 1, pingTimer = null, reconnectTimer = null, reconnectAttempts = 0;
 let discovered = [], markets = new Map(), historyReqs = new Map(), pending = [], paper = [], signalLocks = new Map();
 let activeSymbolsReceived = false;
 let meshRevision=0, cachedMeshRevision=-1, cachedMeshStats=null;
+let cachedMeshWindowsRevision=-1, cachedMeshWindows=null;
 let rankedSignalsRevision=-1, rankedSignalsScope='', rankedSignalsCache=[];
 let renderTimer=null;
 let tradeSocket=null, tradeSocketKey='', tradeReqId=5000, tradeRequests=new Map();
@@ -162,7 +166,7 @@ function estimateNextProbabilities(ds){const stats=transitionCounts(ds),current=
 // Shared mesh used by both the visible table and Matches. Each market contributes
 // only its latest bounded digit history; the current final digit has no future tick
 // included, so the predicted destination is always an unseen next tick.
-function pooledMeshStats(limit=180){
+function pooledMeshStats(limit=MESH_LOOKBACK){
   if(cachedMeshStats&&cachedMeshRevision===meshRevision)return cachedMeshStats;
   const cond=Array.from({length:10},()=>Array(10).fill(0));
   const fromCount=Array(10).fill(0),destinationCount=Array(10).fill(0),edges={};
@@ -183,6 +187,37 @@ function meshNextProbabilities(current,mesh=pooledMeshStats()){
   const probs=Array.from({length:10},(_,d)=>(Number.isInteger(current)?mesh.cond[current][d]:0)+2*(mesh.base[d]||.1));
   const denom=n+2;
   return {n,probs:probs.map(p=>p/denom),counts:Number.isInteger(current)?mesh.cond[current]:Array(10).fill(0),mesh};
+}
+
+// Five chronological windows are built from the same shared pool across all
+// scanned markets. Every window is 60 digits per market (59 transitions).
+// Markets without a complete 300-digit lookback are excluded until history fills.
+function pooledMeshWindowStats(){
+  if(cachedMeshWindows&&cachedMeshWindowsRevision===meshRevision)return cachedMeshWindows;
+  const windows=Array.from({length:MESH_WINDOW_COUNT},()=>({
+    cond:Array.from({length:10},()=>Array(10).fill(0)),
+    fromCount:Array(10).fill(0),
+    destinationCount:Array(10).fill(0),
+    total:0
+  }));
+  for(const m of markets.values()){
+    const ds=m.digits.filter(d=>Number.isInteger(d)&&d>=0&&d<=9).slice(-MESH_LOOKBACK);
+    if(ds.length<MESH_LOOKBACK)continue;
+    for(let w=0;w<MESH_WINDOW_COUNT;w++){
+      const start=w*MESH_WINDOW_SIZE,end=start+MESH_WINDOW_SIZE;
+      const stats=windows[w];
+      for(let i=start+1;i<end;i++){
+        const from=ds[i-1],to=ds[i];
+        stats.cond[from][to]++;
+        stats.fromCount[from]++;
+        stats.destinationCount[to]++;
+        stats.total++;
+      }
+    }
+  }
+  cachedMeshWindows=windows;
+  cachedMeshWindowsRevision=meshRevision;
+  return windows;
 }
 function signalForFamily(m,family){
   const a=m.prices, ds=m.digits.filter(Number.isInteger);
@@ -220,27 +255,31 @@ function signalForFamily(m,family){
     if(!bestOU||c.score>bestOU.score)bestOU=c;
   }
   if(bestOU)cand.push(bestOU);
-  // MATCHES uses the shared Digit Transition Mesh as a prior, not as a substitute
-  // for evidence on the market being considered. Pooling every market's transitions
-  // as if they were this market's own sample can overstate a one-tick digit edge.
-  const pooledMesh=pooledMeshStats();
-  const pooledPrior=meshNextProbabilities(current,pooledMesh).probs;
-  const localCounts=stats.cond[current]||Array(10).fill(0);
-  const meshN=Number(stats.fromCount[current]||0);
-  const priorStrength=12;
-  const meshProbs=localCounts.map((count,d)=>(count+priorStrength*(pooledPrior[d]||.1))/(meshN+priorStrength));
-  const meshCounts=localCounts;
+  // MATCHES prediction comes directly from the shared Digit Transition Mesh.
+  // It aggregates the same current-digit row across all five chronological windows
+  // and requires the winning destination to agree in at least three windows.
+  const pooledMesh=pooledMeshStats(MESH_LOOKBACK);
+  const meshWindows=pooledMeshWindowStats();
+  const windowRows=meshWindows.map((window,index)=>{
+    const n=Number(window.fromCount[current]||0);
+    const probs=window.cond[current].map((count,d)=>(count+2*(pooledMesh.base[d]||.1))/(n+2));
+    const top=probs.map((p,d)=>({d,p,count:window.cond[current][d]||0})).sort((a,b)=>b.p-a.p)[0];
+    return {index,n,top:top?.d??null,topProbability:top?.p??0};
+  });
+  const meshN=windowRows.reduce((sum,row)=>sum+row.n,0);
+  const meshCounts=Array.from({length:10},(_,d)=>meshWindows.reduce((sum,window)=>sum+(window.cond[current][d]||0),0));
+  const meshProbs=meshCounts.map((count,d)=>(count+2*(pooledMesh.base[d]||.1))/(meshN+2));
   const rankedDigits=meshProbs.map((p,d)=>({d,p,count:meshCounts[d]||0})).sort((a,b)=>b.p-a.p);
   const meshSecond=rankedDigits[1];
+  const validWindows=windowRows.filter(row=>row.n>=25);
   let matches=null;
   for(const item of rankedDigits){
-    const p=item.p,rel=meshN/(meshN+18),gap=p-(meshSecond?.p||.1);
-    const score=Math.round(clamp(50+(p-.1)*300*rel,30,88));
+    const p=item.p,rel=meshN/(meshN+25),gap=p-(meshSecond?.p||.1);
+    const score=Math.round(clamp(50+(p-.1)*240*rel,30,88));
     const directExpected=meshN*.1;
-    // Require local evidence, a clear lead over the next digit, and the same
-    // 75-point strong-signal floor used by paper and AUTO execution.
-    const eligible=meshN>=15&&item.count>=Math.ceil(directExpected)+2&&p>=.18&&gap>=.04&&score>=75;
-    const c={pick:`MATCHES ${item.d}`,family:'MT',score,horizon:1,edge:p-.1,n:meshN,transition:`${current}→${item.d}`,reasons:[`Market-local transition: ${current}→${item.d}`,`${item.count}/${meshN} local transitions from digit ${current}; shared mesh contributes a ${priorStrength}-observation prior`,`Smoothed destination share ${(p*100).toFixed(1)}% vs 10% baseline; lead over runner-up ${(gap*100).toFixed(1)} percentage points`],eligible};
+    const agreement=validWindows.filter(row=>row.top===item.d).length;
+    const eligible=meshN>=25&&validWindows.length===MESH_WINDOW_COUNT&&agreement>=3&&item.count>=Math.ceil(directExpected)+2&&p>=.135&&gap>=.01&&score>=62;
+    const c={pick:`MATCHES ${item.d}`,family:'MT',score,horizon:1,edge:p-.1,n:meshN,transition:`${current}→${item.d}`,reasons:[`Shared mesh prediction: ${current}→${item.d}`,`Five 60-digit windows: ${agreement}/5 agree on this destination (minimum 3/5)`,`Pooled destination share ${(p*100).toFixed(1)}% vs 10% baseline; lead over runner-up ${(gap*100).toFixed(1)} percentage points`],eligible};
     if(!matches||c.score>matches.score)matches=c;
   }
   if(matches)cand.push(matches);
