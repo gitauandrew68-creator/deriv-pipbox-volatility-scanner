@@ -220,21 +220,27 @@ function signalForFamily(m,family){
     if(!bestOU||c.score>bestOU.score)bestOU=c;
   }
   if(bestOU)cand.push(bestOU);
-  // MATCHES now reads the exact same pooled Digit Transition Mesh rendered below.
-  // It conditions the pooled mesh on this market's current last digit, then ranks
-  // destination digits from the observed outgoing edges for that source digit.
+  // MATCHES uses the shared Digit Transition Mesh as a prior, not as a substitute
+  // for evidence on the market being considered. Pooling every market's transitions
+  // as if they were this market's own sample can overstate a one-tick digit edge.
   const pooledMesh=pooledMeshStats();
-  const meshEstimate=meshNextProbabilities(current,pooledMesh);
-  const meshN=meshEstimate.n,meshProbs=meshEstimate.probs,meshCounts=meshEstimate.counts;
+  const pooledPrior=meshNextProbabilities(current,pooledMesh).probs;
+  const localCounts=stats.cond[current]||Array(10).fill(0);
+  const meshN=Number(stats.fromCount[current]||0);
+  const priorStrength=12;
+  const meshProbs=localCounts.map((count,d)=>(count+priorStrength*(pooledPrior[d]||.1))/(meshN+priorStrength));
+  const meshCounts=localCounts;
   const rankedDigits=meshProbs.map((p,d)=>({d,p,count:meshCounts[d]||0})).sort((a,b)=>b.p-a.p);
-  const meshTop=rankedDigits[0],meshSecond=rankedDigits[1];
+  const meshSecond=rankedDigits[1];
   let matches=null;
   for(const item of rankedDigits){
-    const p=item.p,rel=meshN/(meshN+25),gap=p-(meshSecond?.p||.1);
-    const score=Math.round(clamp(50+(p-.1)*240*rel,30,88));
+    const p=item.p,rel=meshN/(meshN+18),gap=p-(meshSecond?.p||.1);
+    const score=Math.round(clamp(50+(p-.1)*300*rel,30,88));
     const directExpected=meshN*.1;
-    const eligible=meshN>=25&&item.count>=Math.ceil(directExpected)+2&&p>=.135&&gap>=.01&&score>=62;
-    const c={pick:`MATCHES ${item.d}`,family:'MT',score,horizon:1,edge:p-.1,n:meshN,transition:`${current}→${item.d}`,reasons:[`Shared mesh path: ${current}→${item.d}`,`${item.count} pooled direct transitions from digit ${current} across scanned volatility markets`,`Smoothed mesh destination share ${(p*100).toFixed(1)}% vs 10% baseline; lead over runner-up ${(gap*100).toFixed(1)} percentage points`],eligible};
+    // Require local evidence, a clear lead over the next digit, and the same
+    // 75-point strong-signal floor used by paper and AUTO execution.
+    const eligible=meshN>=15&&item.count>=Math.ceil(directExpected)+2&&p>=.18&&gap>=.04&&score>=75;
+    const c={pick:`MATCHES ${item.d}`,family:'MT',score,horizon:1,edge:p-.1,n:meshN,transition:`${current}→${item.d}`,reasons:[`Market-local transition: ${current}→${item.d}`,`${item.count}/${meshN} local transitions from digit ${current}; shared mesh contributes a ${priorStrength}-observation prior`,`Smoothed destination share ${(p*100).toFixed(1)}% vs 10% baseline; lead over runner-up ${(gap*100).toFixed(1)} percentage points`],eligible};
     if(!matches||c.score>matches.score)matches=c;
   }
   if(matches)cand.push(matches);
