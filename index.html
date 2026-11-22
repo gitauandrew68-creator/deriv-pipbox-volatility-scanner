@@ -846,7 +846,7 @@ async function executeSignal(signal,source='manual'){
   if(mode==='real'&&$('realPhrase').value.trim()!=='TRADE REAL')throw new Error('REAL mode is locked. Type exactly TRADE REAL, then arm execution again.');
   if(signal.family==='OU'){
     const liveMarket=markets.get(signal.symbol),expiry=ouArmExpiry.get(`${signal.symbol}|${signal.pick}`)||0;
-    const expectedTick=Number.isInteger(signal.tickIndex)?signal.tickIndex:null;
+    const expectedTick=Number.isInteger(signal._signalTickIndex)?signal._signalTickIndex:(Number.isInteger(signal.tickIndex)?signal.tickIndex:null);
     const liveOU=liveMarket?signalForFamily(liveMarket,'OU'):null;
     if(!expiry||Date.now()>=expiry||!liveMarket?.connected||expectedTick!==liveMarket.prices.length-1||!liveOU?.eligible||liveOU.pick!==signal.pick){
       throw new Error('Over/Under signal is not armed or its latest three-tick cascade/frequency check is no longer current. Wait for a fresh setup.');
