@@ -97,7 +97,7 @@
   <section class="panel section"><div class="rowhead"><h2>Latest ranked signals</h2><span id="signalCountLabel" class="smallmuted">No signals yet</span></div><div id="signalsTable" class="tablewrap"></div></section>
   <section class="panel section"><div class="rowhead"><h2>Trade verification — Deriv-matched entry, exit and result</h2><span id="paperSummary" class="smallmuted">Waiting for qualifying setups</span></div><div id="paperTable" class="tablewrap"></div></section>
   <section class="panel section"><h2>Activity log</h2><div id="log" class="log" aria-live="polite"></div></section>
-  <div class="footer">BUILD V2.5-FAST-AUTO-LOSS-GOVERNOR · Deriv OAuth 2.0 · public Options WebSocket only · trading requires explicit arming and account selection</div>
+  <div class="footer">BUILD V2.5.1-FAST-AUTO-WARM-SOCKET · Deriv OAuth 2.0 · public Options WebSocket only · trading requires explicit arming and account selection</div>
 </div>
 <script>
 'use strict';
@@ -780,14 +780,25 @@ async function executeSignal(signal,source='manual'){
   if(mode==='real'&&$('realPhrase').value.trim()!=='TRADE REAL')throw new Error('REAL mode is locked. Type exactly TRADE REAL, then arm execution again.');
   tradeBusy=true;updateTradeMetrics();clearTradeError();
   try{
-    await ensureTradeSocket();
+    if(source==='auto'){
+      // AUTO must never wait for OTP creation or a WebSocket handshake after a
+      // signal appears. The channel is prepared when the user arms execution.
+      const expectedKey=`${mode}:${account.account_id}`;
+      if(!tradeSocket||tradeSocket.readyState!==WebSocket.OPEN||tradeSocketKey!==expectedKey){
+        throw new Error('AUTO trading channel is not already ready for this account. Signal skipped; reconnect and arm before the next fresh tick.');
+      }
+    }else{
+      await ensureTradeSocket();
+    }
 
     // AUTO queues can become stale while another order is resolving. Check the
     // current global winner before sending anything; never buy an old queued pick.
     if(source==='auto'){
       const queuedTick=Number(signal._signalTickIndex),liveMarket=markets.get(signal.symbol);
-      if(!liveMarket?.connected||!Number.isInteger(queuedTick)||liveMarket.prices.length-1!==queuedTick){
-        throw new Error('AUTO signal is stale: a newer market tick arrived while it was queued. No order sent; waiting for a fresh signal.');
+      const liveEpoch=liveMarket?.raw.at(-1)?.t??null;
+      if(!liveMarket?.connected||!Number.isInteger(queuedTick)||liveMarket.prices.length-1!==queuedTick||
+         (signal._signalTickEpoch!==null&&signal._signalTickEpoch!==undefined&&liveEpoch!==signal._signalTickEpoch)){
+        throw new Error('AUTO signal is stale: the market tick changed while it was queued. No order sent; waiting for a fresh signal.');
       }
       const liveTop=rankedFamilySignals({eligibleOnly:true,minScore:75}).filter(x=>x.m.symbol===signal.symbol)[0];
       if(!liveTop||liveTop.m.symbol!==signal.symbol||liveTop.s.family!==signal.family||liveTop.s.pick!==signal.pick){
@@ -928,7 +939,12 @@ function maybeAutoExecute(tickedSymbol){
     showTradeError('A configured session risk limit has been reached. Review the session before arming again.');
     return;
   }
-  const mode=tradeMode();
+  const mode=tradeMode(),account=selectedTradeAccount();
+  // Do not enqueue an AUTO signal unless the correct selected account's
+  // authenticated socket is already open. Avoids connection setup latency
+  // between signal qualification and the single direct BUY request.
+  if(!account||!tradeSocket||tradeSocket.readyState!==WebSocket.OPEN||
+     tradeSocketKey!==`${mode}:${account.account_id}`)return;
   if(mode==='real'&&$('realPhrase').value.trim()!=='TRADE REAL'){
     disarmTrading('REAL confirmation text is missing; execution paused.');
     showTradeError('Type TRADE REAL and arm again before real auto-execution.');
@@ -1059,6 +1075,6 @@ const resumeScanAfterOAuth=(()=>{const q=new URLSearchParams(location.search);re
 renderAll();refreshAuth();renderTradeAccounts();updateTradeMetrics();
 $('refreshBalanceBtn').addEventListener('click',async()=>{const btn=$('refreshBalanceBtn');btn.disabled=true;$('balanceRefreshStatus').textContent='Refreshing balances from Deriv…';try{await refreshAuth();$('balanceRefreshStatus').textContent='Balance refresh request completed.';}catch(err){$('balanceRefreshStatus').textContent='Balance refresh failed: '+err.message;}finally{btn.disabled=false;}});
 setTimeout(()=>{if(!running)startScan();},350);
-log('Build V2.5-FAST-AUTO-LOSS-GOVERNOR loaded: stronger local digit evidence, one-market cooldown across families, 15-second AUTO entry gap, live family/market P&L brakes and tighter default session limits; execution stays disarmed until explicitly armed.');
+log('Build V2.5.1-FAST-AUTO-WARM-SOCKET loaded: V2.5 loss governor plus a pre-opened account socket requirement and exact tick identity check; AUTO skips rather than reconnecting after a signal, then submits one direct capped BUY; execution stays disarmed until explicitly armed.');
 </script>
 </body></html>
