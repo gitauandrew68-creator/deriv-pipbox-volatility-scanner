@@ -44,7 +44,7 @@
         <div class="kpi"><div id="resolvedKpi" class="v">0</div><div class="l">Paper checks resolved</div></div>
         <div class="kpi"><div id="rateKpi" class="v">—</div><div class="l">Observed paper win rate</div></div>
       </div>
-      <div class="notice">Choose a scan family above: ALL compares Rise/Fall, Even/Odd, Over/Under and Matches; selecting one family limits ranking to that family. AUTO checks each live market for its strongest qualified setup, uses one capped buy request, and respects open-contract and session risk limits. V2.5 adds a 15-second AUTO entry gap, one-market cooldown across families, and pauses a family or market after six Deriv-settled trades with at least 1 unit of net loss. Signals are heuristic research, not guaranteed predictions. REAL orders use real funds.</div>
+      <div class="notice">Choose a scan family above: ALL compares Rise/Fall, Even/Odd, Over/Under and Matches; selecting one family limits ranking to that family. Over/Under has only UNDER 6 descending (5→4→3, 4→3→2, 3→2→1, 2→1→0) and OVER 4 ascending (5→6→7, 6→7→8, 7→8→9). Both MOST and LEAST appearing digits must be on the winning side within the latest 300 digits. A valid setup arms for 10 seconds; each new tick rechecks the exact latest three consecutive digits and both frequency gates before AUTO can BUY. Other families retain their existing logic. Signals are heuristic research, not guaranteed predictions. REAL orders use real funds.</div>
     </section>
 
     <section class="panel">
@@ -97,7 +97,7 @@
   <section class="panel section"><div class="rowhead"><h2>Latest ranked signals</h2><span id="signalCountLabel" class="smallmuted">No signals yet</span></div><div id="signalsTable" class="tablewrap"></div></section>
   <section class="panel section"><div class="rowhead"><h2>Trade verification — Deriv-matched entry, exit and result</h2><span id="paperSummary" class="smallmuted">Waiting for qualifying setups</span></div><div id="paperTable" class="tablewrap"></div></section>
   <section class="panel section"><h2>Activity log</h2><div id="log" class="log" aria-live="polite"></div></section>
-  <div class="footer">BUILD V2.5.1-FAST-AUTO-WARM-SOCKET · Deriv OAuth 2.0 · public Options WebSocket only · trading requires explicit arming and account selection</div>
+  <div class="footer">BUILD V2.6-OVERUNDER-3TICK-ARMED · Deriv OAuth 2.0 · public Options WebSocket only · trading requires explicit arming and account selection</div>
 </div>
 <script>
 'use strict';
@@ -115,6 +115,8 @@ const MIN_TICKS = 35;
 const MESH_WINDOW_SIZE = 60;
 const MESH_WINDOW_COUNT = 5;
 const MESH_LOOKBACK = MESH_WINDOW_SIZE * MESH_WINDOW_COUNT;
+const OU_FREQUENCY_LOOKBACK = 300;
+const OU_ARM_WINDOW_MS = 10_000;
 let ws = null, running = false, reqId = 1, pingTimer = null, reconnectTimer = null, reconnectAttempts = 0;
 let discovered = [], markets = new Map(), historyReqs = new Map(), pending = [], paper = [], signalLocks = new Map();
 let activeSymbolsReceived = false;
@@ -127,6 +129,7 @@ let tradeArmed=false, tradeBusy=false, currentSignal=null, tradeAccounts=[];
 let tradeOrdersCount=0, tradeSessionPnL=0, tradeLossStreakCount=0;
 let liveMatchedPaperSession=false;
 let closedContractIds=new Set(), autoCooldowns=new Map(), lastAutoOrderAt=0;
+let ouArmExpiry=new Map(), ouLastQueuedTick=new Map();
 let autoOrderQueue=[], autoQueueRunning=false, autoQueuedKeys=new Set();
 let activeContracts=new Map();
 const AUTO_MIN_GAP_MS=15000;
@@ -256,6 +259,83 @@ function pooledMeshWindowStats(){
   cachedMeshWindowsRevision=meshRevision;
   return windows;
 }
+function overUnderCandidates(m){
+  const frequencyDigits=m.digits.filter(d=>Number.isInteger(d)&&d>=0&&d<=9).slice(-OU_FREQUENCY_LOOKBACK);
+  const frequencyReady=frequencyDigits.length===OU_FREQUENCY_LOOKBACK;
+  const frequencyCounts=Array(10).fill(0);
+  for(const digit of frequencyDigits)frequencyCounts[digit]++;
+  const maxFrequency=frequencyReady?Math.max(...frequencyCounts):null;
+  const minFrequency=frequencyReady?Math.min(...frequencyCounts):null;
+  // Use the actual latest three ticks: missing digits cannot be skipped over.
+  const lastThree=m.digits.slice(-3);
+  const sequenceReady=lastThree.length===3&&lastThree.every(d=>Number.isInteger(d)&&d>=0&&d<=9);
+  const mostDigits=frequencyReady?frequencyCounts.map((count,d)=>count===maxFrequency?d:null).filter(d=>d!==null):[];
+  const leastDigits=frequencyReady?frequencyCounts.map((count,d)=>count===minFrequency?d:null).filter(d=>d!==null):[];
+  const build=(pick,barrier,side,direction)=>{
+    const inside=new Set(side);
+    // If there is a tie for MOST or LEAST, every tied digit must remain on the winning side.
+    const mostInside=frequencyReady&&mostDigits.length>0&&mostDigits.every(d=>inside.has(d));
+    const leastInside=frequencyReady&&leastDigits.length>0&&leastDigits.every(d=>inside.has(d));
+    const cascadeValid=sequenceReady&&(direction==='DESC'
+      ? lastThree[0]>=2&&lastThree[0]<=5&&lastThree[1]===lastThree[0]-1&&lastThree[2]===lastThree[1]-1
+      : lastThree[0]>=5&&lastThree[0]<=7&&lastThree[1]===lastThree[0]+1&&lastThree[2]===lastThree[1]+1);
+    const insideCounts=frequencyReady?side.map(d=>frequencyCounts[d]):[];
+    const outsideCounts=frequencyReady?frequencyCounts.filter((count,d)=>!inside.has(d)):[];
+    const mostMargin=frequencyReady?(Math.max(...insideCounts)-Math.max(...outsideCounts))/OU_FREQUENCY_LOOKBACK:0;
+    const leastMargin=frequencyReady?(Math.min(...outsideCounts)-Math.min(...insideCounts))/OU_FREQUENCY_LOOKBACK:0;
+    const marginPoints=Math.round(clamp((mostMargin+leastMargin)*250,0,10));
+    // This is a confluence score, not a calibrated win probability.
+    const score=Math.round(clamp(50+(mostInside?8:0)+(leastInside?8:0)+(cascadeValid?12:0)+marginPoints,35,88));
+    const eligible=frequencyReady&&mostInside&&leastInside&&cascadeValid;
+    const sequence=sequenceReady?lastThree.join(' → '):'waiting for 3 valid ticks';
+    const sideText=side.join(', ');
+    return {
+      pick,family:'OU',score,horizon:1,edge:Math.max(0,(mostMargin+leastMargin)/2),
+      n:frequencyDigits.length,transition:sequence,
+      reasons:[
+        `Only ${pick} is enabled; winning-side digits: ${sideText}`,
+        `MOST appearing digit(s): ${mostDigits.length?mostDigits.join(', '):'waiting'} · ${mostInside?'inside':'not fully inside'} winning side`,
+        `LEAST appearing digit(s): ${leastDigits.length?leastDigits.join(', '):'waiting'} · ${leastInside?'inside':'not fully inside'} winning side`,
+        `Latest three actual ticks: ${sequence} · exact ${direction==='DESC'?'descending':'ascending'} no-skip cascade ${cascadeValid?'CONFIRMED':'not confirmed'}`,
+        `Frequency window: ${frequencyDigits.length}/${OU_FREQUENCY_LOOKBACK} digits`,
+        `Ten-second arm window; check the latest three ticks again before every AUTO buy`
+      ],
+      eligible
+    };
+  };
+  return [
+    build('UNDER 6',6,[0,1,2,3,4,5],'DESC'),
+    build('OVER 4',4,[5,6,7,8,9],'ASC')
+  ];
+}
+function updateOverUnderArm(m){
+  const scope=$('familyFilter')?.value||'ALL';
+  const underKey=`${m.symbol}|UNDER 6`,overKey=`${m.symbol}|OVER 4`;
+  const now=Date.now();
+  for(const key of [underKey,overKey]){
+    const expiry=ouArmExpiry.get(key)||0;
+    if(expiry&&now>=expiry){
+      ouArmExpiry.delete(key);
+      log(`OVER/UNDER ARM EXPIRED · ${m.name} · ${key.endsWith('UNDER 6')?'UNDER 6':'OVER 4'}.`);
+    }
+  }
+  if(scope!=='ALL'&&scope!=='OU'){
+    ouArmExpiry.delete(underKey);ouArmExpiry.delete(overKey);
+    return null;
+  }
+  const setup=signalForFamily(m,'OU');
+  if(!setup.eligible)return null;
+  const activeKey=`${m.symbol}|${setup.pick}`;
+  const oppositeKey=setup.pick==='UNDER 6'?overKey:underKey;
+  ouArmExpiry.delete(oppositeKey);
+  const activeExpiry=ouArmExpiry.get(activeKey)||0;
+  if(activeExpiry<=now){
+    const expires=now+OU_ARM_WINDOW_MS;
+    ouArmExpiry.set(activeKey,expires);
+    log(`OVER/UNDER ARMED · ${m.name} · ${setup.pick} · 10 seconds · cascade ${setup.transition}.`);
+  }
+  return setup;
+}
 function signalForFamily(m,family){
   const a=m.prices, ds=m.digits.filter(Number.isInteger);
   if(a.length<MIN_TICKS||ds.length<MIN_TICKS)return {pick:'NO EDGE',family,score:0,quality:'BUILDING',horizon:0,reasons:['Collecting sufficient tick history.'],eligible:false};
@@ -283,21 +363,7 @@ function signalForFamily(m,family){
   const evenScore=Math.round(clamp(50+(pEvenAdj-.5)*150,35,85)),oddScore=Math.round(clamp(50+(.5-pEvenAdj)*150,35,85));
   cand.push({pick:'EVEN',family:'EO',score:evenScore,horizon:1,edge:pEvenAdj-.5,n,transition:tr[0]?.[0]||'—',reasons:[`Current digit ${current}`,`${n} observed transitions from digit ${current}`,`Estimated next-digit even share ${(pEvenAdj*100).toFixed(1)}%`],eligible:evenScore>=62&&n>=15&&pEvenAdj>=.56});
   cand.push({pick:'ODD',family:'EO',score:oddScore,horizon:1,edge:.5-pEvenAdj,n,transition:tr[0]?.[0]||'—',reasons:[`Current digit ${current}`,`${n} observed transitions from digit ${current}`,`Estimated next-digit odd share ${((1-pEvenAdj)*100).toFixed(1)}%`],eligible:oddScore>=62&&n>=15&&pEvenAdj<=.44});
-  // Compare threshold contracts against their own uniform-digit baseline so Over 1 / Under 8 don't win merely because they are broader contracts.
-  let bestOU=null;
-  for(let barrier=1;barrier<=4;barrier++){
-    const p=probs.reduce((s,prob,d)=>s+(d>barrier?prob:0),0),baseline=(9-barrier)/10;
-    const edge=p-baseline,score=Math.round(clamp(50+edge*260*(n/(n+6)),35,86));
-    const c={pick:`OVER ${barrier}`,family:'OU',score,horizon:1,edge,n,transition:tr[0]?.[0]||'—',reasons:[`Over barrier ${barrier}: next digit must be greater than ${barrier}`,`${n} transitions from current digit ${current}`,`Estimated hit rate ${(p*100).toFixed(1)}%; uniform baseline ${(baseline*100).toFixed(0)}%`],eligible:score>=61&&edge>.06&&n>=15};
-    if(!bestOU||c.score>bestOU.score)bestOU=c;
-  }
-  for(let barrier=5;barrier<=8;barrier++){
-    const p=probs.reduce((s,prob,d)=>s+(d<barrier?prob:0),0),baseline=barrier/10;
-    const edge=p-baseline,score=Math.round(clamp(50+edge*260*(n/(n+6)),35,86));
-    const c={pick:`UNDER ${barrier}`,family:'OU',score,horizon:1,edge,n,transition:tr[0]?.[0]||'—',reasons:[`Under barrier ${barrier}: next digit must be less than ${barrier}`,`${n} transitions from current digit ${current}`,`Estimated hit rate ${(p*100).toFixed(1)}%; uniform baseline ${(baseline*100).toFixed(0)}%`],eligible:score>=61&&edge>.06&&n>=15};
-    if(!bestOU||c.score>bestOU.score)bestOU=c;
-  }
-  if(bestOU)cand.push(bestOU);
+  cand.push(...overUnderCandidates(m));
   // MATCHES prediction comes directly from the shared Digit Transition Mesh.
   // It aggregates the same current-digit row across all five chronological windows
   // and requires the winning destination to agree in at least three windows.
@@ -442,9 +508,8 @@ function maybeSchedulePaper(m,s){
   s=top.s;
   const entryIndex=m.prices.length-1,key=`${m.symbol}|${s.family}`;
   const nextAllowed=signalLocks.get(key)||-1;if(entryIndex<nextAllowed)return;
-  // Keep a small cooldown for the same market/family, matching the AUTO queue's
-  // intent to prevent overlapping duplicate checks on each tick.
-  signalLocks.set(key,entryIndex+Math.max(5,Number(s.horizon)||1)+4);
+  // Over/Under is evaluated on every new three-tick sequence; other families retain their cooldown.
+  signalLocks.set(key,entryIndex+(s.family==='OU'?1:Math.max(5,Number(s.horizon)||1)+4));
   pending.push({symbol:m.symbol,market:m.name,family:s.family,pick:s.pick,score:s.score,horizon:s.horizon,entryIndex,targetIndex:entryIndex+s.horizon,entryPrice:m.prices[entryIndex],entryPriceText:m.quoteTexts.at(-1)||String(m.prices[entryIndex]),entryDigit:m.digits.at(-1),barrier:Number(s.pick.split(' ').at(-1)),created:Date.now()});
   log(`Top-signal paper check queued: ${m.name} ${s.pick} · score ${s.score}/100 · ${s.horizon} tick(s).`);
   renderPaper();
@@ -576,6 +641,7 @@ function onTick(d){
   const quoteText=String(raw);m.decimals=decimalsFor(m.meta,quoteText);m.prices.push(price);m.quoteTexts.push(quoteText);m.digits.push(lastDigit(m,quoteText));m.raw.push({t:q.epoch||null,p:price});
   while(m.prices.length>500){m.prices.shift();m.quoteTexts.shift();m.digits.shift();m.raw.shift();for(const p of pending)if(p.symbol===symbol){p.entryIndex--;p.targetIndex--;}}
   m.connected=true;m.error=false;meshRevision++;
+  updateOverUnderArm(m);
   // Queue/submit AUTO first, before paper bookkeeping and table rendering.
   // This makes the live entry path the highest-priority work on every new tick.
   if(running)maybeAutoExecute(symbol);
@@ -778,6 +844,14 @@ async function executeSignal(signal,source='manual'){
   const risk=validateTradeRisk(),account=selectedTradeAccount(),mode=tradeMode();
   if(!account)throw new Error('Select an authorized account first.');
   if(mode==='real'&&$('realPhrase').value.trim()!=='TRADE REAL')throw new Error('REAL mode is locked. Type exactly TRADE REAL, then arm execution again.');
+  if(signal.family==='OU'){
+    const liveMarket=markets.get(signal.symbol),expiry=ouArmExpiry.get(`${signal.symbol}|${signal.pick}`)||0;
+    const expectedTick=Number.isInteger(signal.tickIndex)?signal.tickIndex:null;
+    const liveOU=liveMarket?signalForFamily(liveMarket,'OU'):null;
+    if(!expiry||Date.now()>=expiry||!liveMarket?.connected||expectedTick!==liveMarket.prices.length-1||!liveOU?.eligible||liveOU.pick!==signal.pick){
+      throw new Error('Over/Under signal is not armed or its latest three-tick cascade/frequency check is no longer current. Wait for a fresh setup.');
+    }
+  }
   tradeBusy=true;updateTradeMetrics();clearTradeError();
   try{
     if(source==='auto'){
@@ -795,6 +869,13 @@ async function executeSignal(signal,source='manual'){
     // current global winner before sending anything; never buy an old queued pick.
     if(source==='auto'){
       const queuedTick=Number(signal._signalTickIndex),liveMarket=markets.get(signal.symbol);
+      if(signal.family==='OU'){
+        const expiry=ouArmExpiry.get(`${signal.symbol}|${signal.pick}`)||0;
+        const liveOU=liveMarket?signalForFamily(liveMarket,'OU'):null;
+        if(!expiry||Date.now()>=expiry||!liveOU?.eligible||liveOU.pick!==signal.pick){
+          throw new Error('Over/Under arm expired or its latest three-tick cascade/frequency check no longer passes. No BUY sent.');
+        }
+      }
       const liveEpoch=liveMarket?.raw.at(-1)?.t??null;
       if(!liveMarket?.connected||!Number.isInteger(queuedTick)||liveMarket.prices.length-1!==queuedTick||
          (signal._signalTickEpoch!==null&&signal._signalTickEpoch!==undefined&&liveEpoch!==signal._signalTickEpoch)){
@@ -824,7 +905,7 @@ async function executeSignal(signal,source='manual'){
       if(!bought?.contract_id)throw new Error('Deriv did not confirm a contract ID. Check Deriv transactions before retrying; no automatic retry was sent.');
       const id=String(bought.contract_id);
       activeContracts.set(id,{signal,source,stake:risk.stake,accountId:account.account_id,mode});
-      if(source==='auto'){
+      if(source==='auto'&&signal.family!=='OU'){
         const liveMarket=markets.get(signal.symbol),acceptedTick=liveMarket?liveMarket.prices.length-1:Number(signal._signalTickIndex)||0;
         const cooldownUntil=acceptedTick+Math.max(10,Number(signal.horizon)||1)+6;
         autoCooldowns.set(`${signal.symbol}|${signal.family}`,cooldownUntil);
@@ -958,14 +1039,23 @@ function maybeAutoExecute(tickedSymbol){
   if(!top)return;
   const signal={...top.s,symbol:top.m.symbol,market:top.m.name};
   if(autoPerformanceBrake(signal))return;
-  if(lastAutoOrderAt&&Date.now()-lastAutoOrderAt<AUTO_MIN_GAP_MS)return;
-  const key=`${signal.symbol}|${signal.family}`;
-  const tickIndex=m.prices.length-1,allowAt=autoCooldowns.get(key)||-1,marketAllow=autoCooldowns.get(`${signal.symbol}|ALL`)||-1;
-  if(tickIndex<Math.max(allowAt,marketAllow)||autoQueuedKeys.has(key))return;
+  const isOU=signal.family==='OU';
+  const tickIndex=m.prices.length-1,key=`${signal.symbol}|${signal.family}`;
+  if(isOU){
+    const expiry=ouArmExpiry.get(`${signal.symbol}|${signal.pick}`)||0;
+    const liveOU=signalForFamily(m,'OU');
+    if(!expiry||Date.now()>=expiry||!liveOU.eligible||liveOU.pick!==signal.pick)return;
+    if(tickIndex<=(ouLastQueuedTick.get(key)??-1)||autoQueuedKeys.has(key))return;
+  }else{
+    if(lastAutoOrderAt&&Date.now()-lastAutoOrderAt<AUTO_MIN_GAP_MS)return;
+    const allowAt=autoCooldowns.get(key)||-1,marketAllow=autoCooldowns.get(`${signal.symbol}|ALL`)||-1;
+    if(tickIndex<Math.max(allowAt,marketAllow)||autoQueuedKeys.has(key))return;
+  }
   const openCap=maxOpenContracts();
   // Reserve capacity for both open contracts and requests already in the queue.
   if(activeContracts.size+autoOrderQueue.length>=openCap)return;
   autoQueuedKeys.add(key);
+  if(isOU)ouLastQueuedTick.set(key,tickIndex);
   autoOrderQueue.push({...signal,_autoKey:key,_signalTickIndex:tickIndex,_signalTickEpoch:m.raw.at(-1)?.t??null});
   log(`FRESH-TICK AUTO signal queued: ${signal.market} · ${signal.pick} · ${signal.family} · score ${signal.score}/100 · tick #${tickIndex} · scope ${$('familyFilter').value} · queue ${autoOrderQueue.length}/${openCap} slots.`);
   drainAutoOrderQueue();
@@ -981,7 +1071,7 @@ async function drainAutoOrderQueue(){
       if(!signal)continue;
       try{
         if(!tradeArmed||$('executionStyle').value!=='auto'||!running)break;
-        if(lastAutoOrderAt&&Date.now()-lastAutoOrderAt<AUTO_MIN_GAP_MS){if(key)autoQueuedKeys.delete(key);continue;}
+        if(signal.family!=='OU'&&lastAutoOrderAt&&Date.now()-lastAutoOrderAt<AUTO_MIN_GAP_MS){if(key)autoQueuedKeys.delete(key);continue;}
         const cleanSignal={...signal};delete cleanSignal._autoKey;
         await executeSignal(cleanSignal,'auto');
       }catch(err){
@@ -1075,6 +1165,6 @@ const resumeScanAfterOAuth=(()=>{const q=new URLSearchParams(location.search);re
 renderAll();refreshAuth();renderTradeAccounts();updateTradeMetrics();
 $('refreshBalanceBtn').addEventListener('click',async()=>{const btn=$('refreshBalanceBtn');btn.disabled=true;$('balanceRefreshStatus').textContent='Refreshing balances from Deriv…';try{await refreshAuth();$('balanceRefreshStatus').textContent='Balance refresh request completed.';}catch(err){$('balanceRefreshStatus').textContent='Balance refresh failed: '+err.message;}finally{btn.disabled=false;}});
 setTimeout(()=>{if(!running)startScan();},350);
-log('Build V2.5.1-FAST-AUTO-WARM-SOCKET loaded: V2.5 loss governor plus a pre-opened account socket requirement and exact tick identity check; AUTO skips rather than reconnecting after a signal, then submits one direct capped BUY; execution stays disarmed until explicitly armed.');
+log('Build V2.6-OVERUNDER-3TICK-ARMED loaded: V2.5 loss governor plus a pre-opened account socket requirement and exact tick identity check; AUTO skips rather than reconnecting after a signal, then submits one direct capped BUY; execution stays disarmed until explicitly armed.');
 </script>
 </body></html>
