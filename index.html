@@ -434,9 +434,8 @@ function maybeSchedulePaper(m,s){
   // checks continue past the configured live-order limit.
   if(tradeArmed||liveMatchedPaperSession)return;
   // Paper-only mode uses the same cross-family qualified ranking and 75 score floor.
-  const ranked=rankedFamilySignals({eligibleOnly:true,minScore:75});
-  const top=ranked[0];
-  if(!top||top.m.symbol!==m.symbol)return;
+  const top=rankedFamilySignals({eligibleOnly:true,minScore:75}).filter(x=>x.m.symbol===m.symbol)[0];
+  if(!top)return;
   s=top.s;
   const entryIndex=m.prices.length-1,key=`${m.symbol}|${s.family}`;
   const nextAllowed=signalLocks.get(key)||-1;if(entryIndex<nextAllowed)return;
