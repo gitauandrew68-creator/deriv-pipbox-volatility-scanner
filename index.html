@@ -782,11 +782,15 @@ async function executeSignal(signal,source='manual'){
     // AUTO queues can become stale while another order is resolving. Check the
     // current global winner before sending anything; never buy an old queued pick.
     if(source==='auto'){
+      const queuedTick=Number(signal._signalTickIndex),liveMarket=markets.get(signal.symbol);
+      if(!liveMarket?.connected||!Number.isInteger(queuedTick)||liveMarket.prices.length-1!==queuedTick){
+        throw new Error('AUTO signal is stale: a newer market tick arrived while it was queued. No order sent; waiting for a fresh signal.');
+      }
       const liveTop=rankedFamilySignals({eligibleOnly:true,minScore:75}).filter(x=>x.m.symbol===signal.symbol)[0];
       if(!liveTop||liveTop.m.symbol!==signal.symbol||liveTop.s.family!==signal.family||liveTop.s.pick!==signal.pick){
-        throw new Error('Queued AUTO signal is stale; it no longer matches the top qualified setup. No order sent.');
+        throw new Error('AUTO signal is stale; it no longer matches the top qualified setup. No order sent.');
       }
-      signal={...liveTop.s,symbol:liveTop.m.symbol,market:liveTop.m.name};
+      signal={...liveTop.s,symbol:liveTop.m.symbol,market:liveTop.m.name,_signalTickIndex:queuedTick,_signalTickEpoch:signal._signalTickEpoch,_autoKey:signal._autoKey};
     }
 
     const mapped=contractFromSignal(signal);
@@ -806,6 +810,10 @@ async function executeSignal(signal,source='manual'){
       if(!bought?.contract_id)throw new Error('Deriv did not confirm a contract ID. Check Deriv transactions before retrying; no automatic retry was sent.');
       const id=String(bought.contract_id);
       activeContracts.set(id,{signal,source,stake:risk.stake,accountId:account.account_id,mode});
+      if(source==='auto'){
+        const liveMarket=markets.get(signal.symbol),acceptedTick=liveMarket?liveMarket.prices.length-1:Number(signal._signalTickIndex)||0;
+        autoCooldowns.set(`${signal.symbol}|${signal.family}`,acceptedTick+Math.max(5,Number(signal.horizon)||1)+4);
+      }
       tradeOrdersCount++;updateTradeMetrics();
       log(`BUY ACCEPTED · ${mode.toUpperCase()} · ${signal.market} · ${signal.pick} · stake ${risk.stake} ${account.currency||'USD'} · contract ${id}`);
       setTradeStatus(`Order accepted by Deriv. Contract ${id} · ${signal.pick} · stake ${risk.stake} ${account.currency||'USD'}.`);
@@ -910,10 +918,9 @@ function maybeAutoExecute(tickedSymbol){
   const openCap=maxOpenContracts();
   // Reserve capacity for both open contracts and requests already in the queue.
   if(activeContracts.size+autoOrderQueue.length>=openCap)return;
-  autoCooldowns.set(key,tickIndex+Math.max(5,Number(signal.horizon)||1)+4);
   autoQueuedKeys.add(key);
-  autoOrderQueue.push({...signal,_autoKey:key});
-  log(`MARKET-RANKED signal queued: ${signal.market} · ${signal.pick} · ${signal.family} · score ${signal.score}/100 · scope ${$('familyFilter').value} · queue ${autoOrderQueue.length}/${openCap} slots.`);
+  autoOrderQueue.push({...signal,_autoKey:key,_signalTickIndex:tickIndex,_signalTickEpoch:m.raw.at(-1)?.t??null});
+  log(`FRESH-TICK AUTO signal queued: ${signal.market} · ${signal.pick} · ${signal.family} · score ${signal.score}/100 · tick #${tickIndex} · scope ${$('familyFilter').value} · queue ${autoOrderQueue.length}/${openCap} slots.`);
   drainAutoOrderQueue();
 }
 async function drainAutoOrderQueue(){
