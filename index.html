@@ -24,7 +24,7 @@
 </head>
 <body><div class="wrap">
   <header class="top">
-    <div class="brand"><h1>DERIV AI + PIPBOX-STYLE SCANNER</h1><p>Live Volatility markets · shared Digit Transition Mesh · four contract families · optional Deriv account execution <span style="color:#7fd9c0;font-size:10px">· V2.1 STABLE OAUTH / OPTIONS WS</span></p></div>
+    <div class="brand"><h1>DERIV AI + PIPBOX-STYLE SCANNER</h1><p>Live Volatility markets · shared Digit Transition Mesh · four contract families · optional Deriv account execution <span style="color:#7fd9c0;font-size:10px">· V2.4 FAST AUTO / MESH + FRACTAL CONFLUENCE</span></p></div>
     <div class="badges"><span id="modeBadge" class="badge warn">PAPER MODE</span><span id="connBadge" class="badge">PUBLIC WS: OFFLINE</span><span id="authBadge" class="badge">DERIV: NOT CONNECTED</span><span id="tradeBadge" class="badge warn">EXECUTION: DISARMED</span></div>
   </header>
 
@@ -44,13 +44,13 @@
         <div class="kpi"><div id="resolvedKpi" class="v">0</div><div class="l">Paper checks resolved</div></div>
         <div class="kpi"><div id="rateKpi" class="v">—</div><div class="l">Observed paper win rate</div></div>
       </div>
-      <div class="notice">Choose a scan family above: ALL compares Rise/Fall, Even/Odd, Over/Under and Matches; selecting one family limits ranking to that family. AUTO queues only the highest-ranked currently qualified setup across the selected scope, subject to your limits. Signals are heuristic research, not guaranteed predictions. REAL orders use real funds.</div>
+      <div class="notice">Choose a scan family above: ALL compares Rise/Fall, Even/Odd, Over/Under and Matches; selecting one family limits ranking to that family. AUTO checks each live market for its strongest qualified setup, uses one capped buy request, and respects open-contract and session risk limits. Signals are heuristic research, not guaranteed predictions. REAL orders use real funds.</div>
     </section>
 
     <section class="panel">
       <div class="rowhead"><h2>Best current setup · scan family</h2><select id="familyFilter" class="select" aria-label="Scan family"><option value="ALL">All four families</option><option value="RF">Rise / Fall</option><option value="EO">Even / Odd</option><option value="OU">Over / Under</option><option value="MT">Matches</option></select></div>
       <div class="predgrid"><div class="hero"><div class="small">HIGHEST-RANKED CURRENT SIGNAL</div><div id="predMarket" class="market">Waiting for market data…</div><div id="predPick" class="pick">NO EDGE</div><div id="predFamily" class="family">No qualified setup</div><div class="scoreline"><div id="predScore" class="score">—</div><div class="small" style="padding-bottom:5px">signal score / 100</div></div><div class="meter"><span id="scoreMeter"></span></div><div id="predReason" class="reason">Start scanning to collect ticks and build the transition mesh.</div></div>
-        <div class="facts"><div class="fact"><b id="predQuality">—</b><span>Research grade</span></div><div class="fact"><b id="predHorizon">—</b><span>Resolution horizon</span></div><div class="fact"><b id="predRegime">—</b><span>Price regime</span></div><div class="fact"><b id="predTrans">—</b><span>Current-digit transition</span></div><div class="fact"><b id="predRsi">—</b><span>RSI 14 reference</span></div><div class="fact"><b id="predSr">—</b><span>Micro support / resistance</span></div></div>
+        <div class="facts"><div class="fact"><b id="predQuality">—</b><span>Research grade</span></div><div class="fact"><b id="predHorizon">—</b><span>Resolution horizon</span></div><div class="fact"><b id="predRegime">—</b><span>Price regime</span></div><div class="fact"><b id="predTrans">—</b><span>Current-digit transition</span></div><div class="fact"><b id="predRsi">—</b><span>RSI 14 reference</span></div><div class="fact"><b id="predSr">—</b><span>Micro support / resistance</span></div><div class="fact"><b id="predStructure">—</b><span>Confirmed fractal structure</span></div><div class="fact"><b id="predBB">—</b><span>Bollinger context · 20/2</span></div></div>
       </div>
     </section>
   </div>
@@ -69,6 +69,7 @@
       <label class="tradefield" for="tradeStake">Stake per order<input id="tradeStake" type="number" min="0.35" max="1000" step="0.01" value="1.00"><small>Uses the selected account currency.</small></label>
       <label class="tradefield" for="tradeStakeCap">Maximum stake/order<input id="tradeStakeCap" type="number" min="0.35" max="1000" step="0.01" value="1.00"><small>Orders above this cap are blocked.</small></label>
       <label class="tradefield" for="tradeMaxOrders">Max accepted orders this session<input id="tradeMaxOrders" type="number" min="1" max="100" step="1" value="10"><small>Hard stop: once Deriv confirms this many buys, AUTO stops. This is not a target and does not force extra orders.</small></label>
+      <label class="tradefield" for="tradeMaxOpen">Max concurrent open contracts<input id="tradeMaxOpen" type="number" min="1" max="3" step="1" value="2"><small>AUTO waits for settlement when all open slots are occupied.</small></label>
       <label class="tradefield" for="tradeLossLimit">Session loss stop<input id="tradeLossLimit" type="number" min="1" max="10000" step="0.01" value="5.00"><small>Stops new orders at this realized loss.</small></label>
       <label class="tradefield" for="tradeLossStreak">Stop after consecutive losses<input id="tradeLossStreak" type="number" min="1" max="10" step="1" value="3"><small>Counts settled live contracts in this page session.</small></label>
       <label class="tradefield" for="executionStyle">Execution style<select id="executionStyle" class="select"><option value="manual" selected>Manual · click Trade Signal</option><option value="auto">AUTO · execute qualified signals</option></select><small>Auto is not active until you arm it.</small></label>
@@ -81,10 +82,10 @@
     </div>
     <div id="tradeStatus" class="tradeStatus">Not armed. To start: Connect Deriv, select DEMO, choose an account, then press “Connect account & arm execution”.</div>
     <div id="tradeError" class="notice hidden"></div>
-    <div class="tradeMetrics">
+    <div class="tradeMetrics" style="grid-template-columns:repeat(4,minmax(0,1fr))">
       <div class="kpi"><div id="tradeOrdersCount" class="v">0</div><div class="l">Orders this page session</div></div>
       <div class="kpi"><div id="tradeSessionPnL" class="v">0.00</div><div class="l">Settled profit/loss · account currency</div></div>
-      <div class="kpi"><div id="tradeLossStreakCount" class="v">0</div><div class="l">Consecutive losses</div></div>
+      <div class="kpi"><div id="tradeLossStreakCount" class="v">0</div><div class="l">Consecutive losses</div></div><div class="kpi"><div id="tradeOpenContracts" class="v">0</div><div class="l">Open contracts</div></div>
     </div>
   </section>
 
@@ -96,7 +97,7 @@
   <section class="panel section"><div class="rowhead"><h2>Latest ranked signals</h2><span id="signalCountLabel" class="smallmuted">No signals yet</span></div><div id="signalsTable" class="tablewrap"></div></section>
   <section class="panel section"><div class="rowhead"><h2>Trade verification — Deriv-matched entry, exit and result</h2><span id="paperSummary" class="smallmuted">Waiting for qualifying setups</span></div><div id="paperTable" class="tablewrap"></div></section>
   <section class="panel section"><h2>Activity log</h2><div id="log" class="log" aria-live="polite"></div></section>
-  <div class="footer">BUILD V2.1-STABLE-OAUTH-20261015 · Deriv OAuth 2.0 · public Options WebSocket only · trading requires explicit arming and account selection</div>
+  <div class="footer">BUILD V2.4-FAST-AUTO-FRACTAL-MESH · Deriv OAuth 2.0 · public Options WebSocket only · trading requires explicit arming and account selection</div>
 </div>
 <script>
 'use strict';
@@ -161,6 +162,39 @@ function stddev(a){if(a.length<2)return 0;const m=mean(a);return Math.sqrt(mean(
 function calcRSI(a,n=14){if(a.length<n+1)return 50;let gain=0,loss=0;for(let i=a.length-n;i<a.length;i++){const d=a[i]-a[i-1];if(d>=0)gain+=d;else loss-=d;}if(loss===0)return gain===0?50:100;return 100-(100/(1+gain/loss));}
 function priceRegime(a){if(a.length<10)return 'BUILDING';const tail=a.slice(-8),disp=tail.at(-1)-tail[0],range=Math.max(...tail)-Math.min(...tail),vol=stddev(a.slice(-15).slice(1).map((v,i)=>v-a.slice(-15)[i]));if(range===0)return 'COMPRESSION';if(Math.abs(disp)>range*.55)return disp>0?'UP TREND':'DOWN TREND';if(vol>0&&range<vol*2.5)return 'COMPRESSION';return 'CHOP';}
 function microSR(a){if(a.length<10)return 'BUILDING';const tail=a.slice(-10),high=Math.max(...tail),low=Math.min(...tail),price=tail.at(-1),range=high-low;if(range===0)return 'COMPRESSION';const position=(price-low)/range;return position>.82?'NEAR RESISTANCE':position<.18?'NEAR SUPPORT':'MID-RANGE';}
+function confirmedFractals(a){
+  const highs=[],lows=[],start=Math.max(0,a.length-100);
+  // A Williams 5-point fractal is only confirmed after two subsequent ticks.
+  for(let i=Math.max(2,start);i<a.length-2;i++){
+    const v=a[i];if(!Number.isFinite(v))continue;
+    if(v>a[i-1]&&v>a[i-2]&&v>a[i+1]&&v>a[i+2])highs.push(v);
+    if(v<a[i-1]&&v<a[i-2]&&v<a[i+1]&&v<a[i+2])lows.push(v);
+  }
+  return {highs,lows};
+}
+function fractalStructure(a){
+  const f=confirmedFractals(a),h=f.highs.slice(-2),l=f.lows.slice(-2);
+  let state='RANGE',bias=0;
+  if(h.length===2&&l.length===2){
+    const hh=h[1]>h[0],hl=l[1]>l[0],lh=h[1]<h[0],ll=l[1]<l[0];
+    if(hh&&hl){state='HH → HL';bias=1;}
+    else if(lh&&ll){state='LH → LL';bias=-1;}
+    else if(hh||hl){state='BULLISH MIX';bias=.45;}
+    else if(lh||ll){state='BEARISH MIX';bias=-.45;}
+  }
+  const last=a.at(-1),fh=f.highs.at(-1),fl=f.lows.at(-1);
+  if(Number.isFinite(fh)&&last>fh){state='FRACTAL HIGH BREAK';bias=Math.max(.9,bias);}
+  if(Number.isFinite(fl)&&last<fl){state='FRACTAL LOW BREAK';bias=Math.min(-.9,bias);}
+  return {state,bias};
+}
+function bollingerContext(a,period=20,multiplier=2){
+  if(a.length<period)return {location:'BUILDING',percentB:.5};
+  const values=a.slice(-period),mid=mean(values),sd=stddev(values);
+  const upper=mid+multiplier*sd,lower=mid-multiplier*sd,width=upper-lower;
+  const percentB=width>0?(a.at(-1)-lower)/width:.5;
+  const location=a.at(-1)>upper?'ABOVE UPPER':a.at(-1)<lower?'BELOW LOWER':percentB>=.8?'UPPER BAND':percentB<=.2?'LOWER BAND':'MID-BAND';
+  return {location,percentB};
+}
 function transitionCounts(ds, limit=180){const s=ds.slice(-limit), all=Array(10).fill(0), cond=Array.from({length:10},()=>Array(10).fill(0)), fromCount=Array(10).fill(0), edges={};for(const d of s){if(Number.isInteger(d)&&d>=0&&d<=9)all[d]++;}for(let i=1;i<s.length;i++){const from=s[i-1],to=s[i];if(!Number.isInteger(from)||!Number.isInteger(to)||from<0||from>9||to<0||to>9)continue;cond[from][to]++;fromCount[from]++;const k=`${from}→${to}`;edges[k]=(edges[k]||0)+1;}const total=all.reduce((a,b)=>a+b,0)||1;return {all,cond,fromCount,edges,base:all.map(v=>v/total)};}
 function estimateNextProbabilities(ds){const stats=transitionCounts(ds),current=ds.at(-1);if(!Number.isInteger(current))return {stats,probs:Array(10).fill(.1),n:0,current};const n=stats.fromCount[current];const probs=stats.cond[current].map((count,d)=>(count+2*stats.base[d])/(n+2));return {stats,probs,n,current};}
 // Shared mesh used by both the visible table and Matches. Each market contributes
@@ -223,7 +257,7 @@ function signalForFamily(m,family){
   const a=m.prices, ds=m.digits.filter(Number.isInteger);
   if(a.length<MIN_TICKS||ds.length<MIN_TICKS)return {pick:'NO EDGE',family,score:0,quality:'BUILDING',horizon:0,reasons:['Collecting sufficient tick history.'],eligible:false};
   const {stats,probs,n,current}=estimateNextProbabilities(ds);
-  const rsi=calcRSI(a),reg=priceRegime(a),sr=microSR(a),tr=Object.entries(stats.edges).sort((x,y)=>y[1]-x[1]);
+  const rsi=calcRSI(a),reg=priceRegime(a),sr=microSR(a),fract=fractalStructure(a),bb=bollingerContext(a),tr=Object.entries(stats.edges).sort((x,y)=>y[1]-x[1]);
   const tail=a.slice(-13),diffs=tail.slice(1).map((v,i)=>v-tail[i]);
   const vol=stddev(diffs)||1e-12;
   const momentum=diffs.slice(-5).reduce((sum,v)=>sum+v,0);
@@ -232,10 +266,16 @@ function signalForFamily(m,family){
   if(reg==='UP TREND'){rise+=5;fall-=3;}if(reg==='DOWN TREND'){fall+=5;rise-=3;}
   if(sr==='NEAR RESISTANCE')rise-=4;if(sr==='NEAR SUPPORT')fall-=4;
   if(rsi>72)rise-=5;if(rsi<28)fall-=5;
+  // Modest confirmation changes only; do not bypass or weaken existing RF gates.
+  rise+=4*fract.bias;fall-=4*fract.bias;
+  if(bb.location==='UPPER BAND'&&z>0)rise+=2;
+  if(bb.location==='LOWER BAND'&&z<0)fall+=2;
+  if(bb.location==='ABOVE UPPER'&&z>0)rise+=2;
+  if(bb.location==='BELOW LOWER'&&z<0)fall+=2;
   rise=Math.round(clamp(rise,30,85));fall=Math.round(clamp(fall,30,85));
   const cand=[];
-  cand.push({pick:'RISE',family:'RF',score:rise,horizon:5,edge:(rise-50)/100,n,transition:tr[0]?.[0]||'—',reasons:[`${reg} price regime`,`5-tick normalized momentum ${z.toFixed(2)}`,`RSI ${rsi.toFixed(1)}`,sr],eligible:rise>=62&&rise-fall>=7});
-  cand.push({pick:'FALL',family:'RF',score:fall,horizon:5,edge:(fall-50)/100,n,transition:tr[0]?.[0]||'—',reasons:[`${reg} price regime`,`5-tick normalized momentum ${z.toFixed(2)}`,`RSI ${rsi.toFixed(1)}`,sr],eligible:fall>=62&&fall-rise>=7});
+  cand.push({pick:'RISE',family:'RF',score:rise,horizon:5,edge:(rise-50)/100,n,transition:tr[0]?.[0]||'—',reasons:[`${reg} price regime`,`5-tick normalized momentum ${z.toFixed(2)}`,`RSI ${rsi.toFixed(1)}`,sr,`Fractals: ${fract.state}`,`Bollinger: ${bb.location}`],eligible:rise>=62&&rise-fall>=7});
+  cand.push({pick:'FALL',family:'RF',score:fall,horizon:5,edge:(fall-50)/100,n,transition:tr[0]?.[0]||'—',reasons:[`${reg} price regime`,`5-tick normalized momentum ${z.toFixed(2)}`,`RSI ${rsi.toFixed(1)}`,sr,`Fractals: ${fract.state}`,`Bollinger: ${bb.location}`],eligible:fall>=62&&fall-rise>=7});
   const pEven=probs.reduce((s,p,d)=>s+(d%2===0?p:0),0),relParity=n/(n+8),pEvenAdj=.5+(pEven-.5)*relParity;
   const evenScore=Math.round(clamp(50+(pEvenAdj-.5)*150,35,85)),oddScore=Math.round(clamp(50+(.5-pEvenAdj)*150,35,85));
   cand.push({pick:'EVEN',family:'EO',score:evenScore,horizon:1,edge:pEvenAdj-.5,n,transition:tr[0]?.[0]||'—',reasons:[`Current digit ${current}`,`${n} observed transitions from digit ${current}`,`Estimated next-digit even share ${(pEvenAdj*100).toFixed(1)}%`],eligible:evenScore>=62&&n>=6&&pEvenAdj>.5});
@@ -296,7 +336,7 @@ function signalForFamily(m,family){
   const best=familyBest||allBest;
   const eligible=Boolean(best?.eligible);
   const quality=eligible?(best.score>=76?'A':'B'):(best.score>=55?'WATCH':'NO EDGE');
-  return {...best,quality,eligible,rsi,reg,sr,transition:best?.transition||tr[0]?.[0]||'—',reasons:best?.reasons||[],candidates:cand,dsCount:ds.length};
+  return {...best,quality,eligible,rsi,reg,sr,fract,bb,transition:best?.transition||tr[0]?.[0]||'—',reasons:best?.reasons||[],candidates:cand,dsCount:ds.length};
 }
 function signalForMarket(m){return signalForFamily(m,$('familyFilter').value);}
 // Build a comparable candidate list across the selected scope. The family scores
@@ -348,9 +388,9 @@ function renderPrediction(){
     $('predPick').textContent=!activeSymbolsReceived||!anyMarketData?'NO MARKET DATA':'NO EDGE';
     $('predFamily').textContent=!activeSymbolsReceived?'Connection not established':(!anyMarketData?'Building market observations':'Wait for more observations');
     $('predScore').textContent='—';$('scoreMeter').style.width='0';$('predQuality').textContent='—';$('predHorizon').textContent='—';$('predRegime').textContent='—';$('predTrans').textContent='—';$('predRsi').textContent='—';$('predSr').textContent='—';
-    $('predReason').textContent=!activeSymbolsReceived?'No active-symbol response has arrived. This is a connection/data state, not a signal assessment.':(!anyMarketData?'Market symbols were received, but enough tick history has not arrived to evaluate signals.':'No candidate cleared the current research gate. This is preferable to forcing a signal.');return;
+    $('predReason').textContent=!activeSymbolsReceived?'No active-symbol response has arrived. This is a connection/data state, not a signal assessment.':(!anyMarketData?'Market symbols were received, but enough tick history has not arrived to evaluate signals.':'No candidate cleared the current research gate. This is preferable to forcing a signal.');$('predStructure').textContent='—';$('predBB').textContent='—';return;
   }
-  const {m,s}=item;currentSignal={symbol:m.symbol,market:m.name,family:s.family,pick:s.pick,horizon:s.horizon,score:s.score,eligible:Boolean(s.eligible),transition:s.transition||'—',entryPrice:m.prices.at(-1),entryDigit:m.digits.at(-1),tickIndex:m.prices.length-1};$('manualTradeBtn').disabled=!(tradeArmed&&currentSignal.eligible&&!tradeBusy);$('predMarket').textContent=m.name;$('predPick').textContent=s.pick;$('predFamily').textContent=`${familyName(s.family)} · ${s.horizon}-tick verification horizon`;$('predScore').textContent=String(s.score);$('scoreMeter').style.width=`${clamp(s.score,0,100)}%`;$('predQuality').textContent=s.quality;$('predHorizon').textContent=s.horizon===5?'5 exact ticks':'1 exact tick';$('predRegime').textContent=s.reg||'—';$('predTrans').textContent=s.transition||'—';$('predRsi').textContent=Number.isFinite(s.rsi)?s.rsi.toFixed(1):'—';$('predSr').textContent=s.sr||'—';$('predReason').textContent=s.reasons.join(' · ');
+  const {m,s}=item;currentSignal={symbol:m.symbol,market:m.name,family:s.family,pick:s.pick,horizon:s.horizon,score:s.score,eligible:Boolean(s.eligible),transition:s.transition||'—',entryPrice:m.prices.at(-1),entryDigit:m.digits.at(-1),tickIndex:m.prices.length-1};$('manualTradeBtn').disabled=!(tradeArmed&&currentSignal.eligible&&!tradeBusy);$('predMarket').textContent=m.name;$('predPick').textContent=s.pick;$('predFamily').textContent=`${familyName(s.family)} · ${s.horizon}-tick verification horizon`;$('predScore').textContent=String(s.score);$('scoreMeter').style.width=`${clamp(s.score,0,100)}%`;$('predQuality').textContent=s.quality;$('predHorizon').textContent=s.horizon===5?'5 exact ticks':'1 exact tick';$('predRegime').textContent=s.reg||'—';$('predTrans').textContent=s.transition||'—';$('predRsi').textContent=Number.isFinite(s.rsi)?s.rsi.toFixed(1):'—';$('predSr').textContent=s.sr||'—';$('predStructure').textContent=s.fract?.state||'—';$('predBB').textContent=s.bb?(`${s.bb.location} · %B ${s.bb.percentB.toFixed(2)}`):'—';$('predReason').textContent=s.reasons.join(' · ');
 }
 function familyName(f){return ({RF:'Rise / Fall',EO:'Even / Odd',OU:'Over / Under',MT:'Matches'})[f]||f;}
 function renderMesh(){
@@ -371,12 +411,13 @@ function renderPaper(){
   const losses=visiblePaper.filter(x=>x.result==='LOSS').length;
   const voids=visiblePaper.filter(x=>x.result==='VOID').length;
   const total=wins+losses;
+  const matchedPnL=visiblePaper.filter(x=>x.liveMirror&&Number.isFinite(x.actualProfit)).reduce((sum,x)=>sum+x.actualProfit,0);
   const pendingCount=liveMatchedPaperSession?openLive.length:pending.filter(x=>!x.liveMirror).length;
   $('pendingKpi').textContent=String(pendingCount);
   $('resolvedKpi').textContent=String(total);
   $('rateKpi').textContent=total?((wins/total*100).toFixed(1)+'%'):'—';
   if(liveMatchedPaperSession){
-    $('paperSummary').textContent=wins+' wins · '+losses+' losses'+(voids?' · '+voids+' void':'')+' · '+openLive.length+' live contracts open · '+(total?((wins/total*100).toFixed(1)+'% observed contract win rate'):'waiting for first settlement')+' · entry/exit tick/spot from Deriv';
+    $('paperSummary').textContent=wins+' wins · '+losses+' losses'+(voids?' · '+voids+' void':'')+' · '+openLive.length+' live contracts open · '+(total?((wins/total*100).toFixed(1)+'% observed contract win rate'):'waiting for first settlement')+' · actual Deriv P/L '+(matchedPnL>=0?'+':'')+matchedPnL.toFixed(2)+' · entry/exit tick/spot from Deriv';
   }else{
     $('paperSummary').textContent=wins+' wins · '+losses+' losses · '+pendingCount+' unresolved paper checks · '+(total?((wins/total*100).toFixed(1)+'% simulated win rate'):'no resolved sample yet')+' · no live orders mirrored yet';
   }
@@ -625,7 +666,7 @@ function updateTradeMetrics(){
   $('tradeOrdersCount').textContent=String(tradeOrdersCount);
   $('tradeSessionPnL').textContent=tradeSessionPnL.toFixed(2);
   $('tradeSessionPnL').className='v '+(tradeSessionPnL>0?'green':tradeSessionPnL<0?'red':'');
-  $('tradeLossStreakCount').textContent=String(tradeLossStreakCount);
+  $('tradeLossStreakCount').textContent=String(tradeLossStreakCount);$('tradeOpenContracts').textContent=String(activeContracts.size);
   $('tradeBadge').textContent=tradeArmed?`EXECUTION: ${tradeMode().toUpperCase()} ARMED`:'EXECUTION: DISARMED';
   $('tradeBadge').className='badge '+(tradeArmed?(tradeMode()==='real'?'bad':'good'):'warn');
   $('armTradeBtn').disabled=tradeBusy;
@@ -699,6 +740,7 @@ function handleContractUpdate(c){
   const currency=selectedTradeAccount()?.currency||'account currency';
   log(`Contract ${id} settled: ${Number.isFinite(profit)?profit.toFixed(2):'P/L unavailable'} ${currency}. Session P/L ${tradeSessionPnL.toFixed(2)}.`);
   updateTradeMetrics();
+  if(tradeArmed&&$('executionStyle').value==='auto')drainAutoOrderQueue();
   refreshAuth().catch(err=>log(`Balance refresh after settlement failed: ${err.message}`));
   const maxLoss=Number($('tradeLossLimit').value),maxStreak=Math.max(1,Math.min(10,Number($('tradeLossStreak').value)||3));
   if(tradeSessionPnL<=-Math.abs(maxLoss)||tradeLossStreakCount>=maxStreak){$('executionStyle').value='manual';disarmTrading(tradeSessionPnL<=-Math.abs(maxLoss)?'Session loss limit reached; new orders stopped.':'Consecutive-loss stop reached; new orders stopped.');showTradeError('Risk limit reached. Review results before arming execution again.');}
@@ -713,11 +755,14 @@ function contractFromSignal(signal){
   if(['DIGITMATCH','DIGITOVER','DIGITUNDER'].includes(contract_type)&&barrier===undefined)throw new Error('Signal is missing its digit barrier. No order sent.');
   return {contract_type,barrier};
 }
+function maxOpenContracts(){const n=Number($('tradeMaxOpen')?.value||2);return Number.isInteger(n)?Math.max(1,Math.min(3,n)):2;}
 function validateTradeRisk(){
-  const stake=Number($('tradeStake').value),cap=Number($('tradeStakeCap').value),maxOrders=Number($('tradeMaxOrders').value),lossLimit=Number($('tradeLossLimit').value);
+  const stake=Number($('tradeStake').value),cap=Number($('tradeStakeCap').value),maxOrders=Number($('tradeMaxOrders').value),lossLimit=Number($('tradeLossLimit').value),openCap=Number($('tradeMaxOpen').value);
   if(!Number.isFinite(stake)||stake<=0||!Number.isFinite(cap)||cap<=0||stake>cap)throw new Error('Stake must be positive and no greater than the maximum stake/order cap.');
   if(!Number.isInteger(maxOrders)||maxOrders<1||maxOrders>100)throw new Error('Max orders/session must be an integer from 1 to 100.');
   if(!Number.isFinite(lossLimit)||lossLimit<=0)throw new Error('Session loss stop must be positive.');
+  if(!Number.isInteger(openCap)||openCap<1||openCap>3)throw new Error('Concurrent open contracts must be 1–3.');
+  if(activeContracts.size>=openCap)throw new Error(`Open-contract cap reached (${openCap}); wait for settlement.`);
   if(tradeOrdersCount>=maxOrders)throw new Error(`Session order cap reached (${maxOrders}).`);
   if(tradeSessionPnL<=-Math.abs(lossLimit))throw new Error('Session loss stop has already been reached.');
   const maxStreak=Math.max(1,Math.min(10,Number($('tradeLossStreak').value)||3));
@@ -738,7 +783,7 @@ async function executeSignal(signal,source='manual'){
     // AUTO queues can become stale while another order is resolving. Check the
     // current global winner before sending anything; never buy an old queued pick.
     if(source==='auto'){
-      const liveTop=rankedFamilySignals({eligibleOnly:true,minScore:75})[0];
+      const liveTop=rankedFamilySignals({eligibleOnly:true,minScore:75}).filter(x=>x.m.symbol===signal.symbol)[0];
       if(!liveTop||liveTop.m.symbol!==signal.symbol||liveTop.s.family!==signal.family||liveTop.s.pick!==signal.pick){
         throw new Error('Queued AUTO signal is stale; it no longer matches the top qualified setup. No order sent.');
       }
@@ -746,6 +791,7 @@ async function executeSignal(signal,source='manual'){
     }
 
     const mapped=contractFromSignal(signal);
+    if(activeContracts.size>=maxOpenContracts())throw new Error('Open-contract cap reached before order submission.');
     const proposalRequest={proposal:1,amount:risk.stake,basis:'stake',contract_type:mapped.contract_type,currency:String(account.currency||'USD').toUpperCase(),duration:Math.max(1,Math.min(1000,Math.round(Number(signal.horizon)||1))),duration_unit:'t',underlying_symbol:signal.symbol};
     if(mapped.barrier!==undefined)proposalRequest.barrier=String(mapped.barrier);
 
@@ -760,7 +806,7 @@ async function executeSignal(signal,source='manual'){
       const bought=bResponse.buy||bResponse.data?.buy;
       if(!bought?.contract_id)throw new Error('Deriv did not confirm a contract ID. Check Deriv transactions before retrying; no automatic retry was sent.');
       const id=String(bought.contract_id);
-      activeContracts.set(id,{signal,source,stake:risk.stake});
+      activeContracts.set(id,{signal,source,stake:risk.stake,accountId:account.account_id,mode});
       tradeOrdersCount++;updateTradeMetrics();
       log(`BUY ACCEPTED · ${mode.toUpperCase()} · ${signal.market} · ${signal.pick} · stake ${risk.stake} ${account.currency||'USD'} · contract ${id}`);
       setTradeStatus(`Order accepted by Deriv. Contract ${id} · ${signal.pick} · stake ${risk.stake} ${account.currency||'USD'}.`);
@@ -792,7 +838,7 @@ async function executeSignal(signal,source='manual'){
     const bResponse=await tradeCall({buy:String(proposal.id),price:askPrice});
     const bought=bResponse.buy||bResponse.data?.buy;
     if(!bought?.contract_id)throw new Error('Deriv did not confirm a contract ID. Check Deriv transactions before retrying.');
-    const id=String(bought.contract_id);activeContracts.set(id,{signal,source,stake:askPrice});tradeOrdersCount++;updateTradeMetrics();
+    const id=String(bought.contract_id);activeContracts.set(id,{signal,source,stake:askPrice,accountId:account.account_id,mode});tradeOrdersCount++;updateTradeMetrics();
     log(`BUY ACCEPTED · ${mode.toUpperCase()} · ${signal.market} · ${signal.pick} · stake ${askPrice} ${account.currency||'USD'} · contract ${id}`);
     setTradeStatus(`Order accepted by Deriv. Contract ${id} · ${signal.pick} · ${askPrice} ${account.currency||'USD'}.`);
     scheduleMatchedLivePaper(signal,id,bought,source,mode,askPrice);
@@ -856,20 +902,19 @@ function maybeAutoExecute(tickedSymbol){
   if(!m||!m.connected)return;
   // AUTO follows the same cross-family rank as paper verification. Keep the
   // established 75 score floor and every contract family's evidence gates.
-  const ranked=rankedFamilySignals({eligibleOnly:true,minScore:75});
-  const top=ranked[0];
-  if(!top||top.m.symbol!==tickedSymbol)return;
-  const signal=top.s;
+  const top=rankedFamilySignals({eligibleOnly:true,minScore:75}).filter(x=>x.m.symbol===tickedSymbol)[0];
+  if(!top)return;
+  const signal={...top.s,symbol:top.m.symbol,market:top.m.name};
   const key=`${signal.symbol}|${signal.family}`;
   const tickIndex=m.prices.length-1,allowAt=autoCooldowns.get(key)||-1;
   if(tickIndex<allowAt||autoQueuedKeys.has(key))return;
-  // Limit pending burst size so simultaneous market signals cannot create an
-  // unbounded order backlog. Orders are sent in a controlled queue over one socket.
-  if(autoOrderQueue.length>=3)return;
+  const openCap=maxOpenContracts();
+  // Reserve capacity for both open contracts and requests already in the queue.
+  if(activeContracts.size+autoOrderQueue.length>=openCap)return;
   autoCooldowns.set(key,tickIndex+Math.max(5,Number(signal.horizon)||1)+4);
   autoQueuedKeys.add(key);
   autoOrderQueue.push({...signal,_autoKey:key});
-  log(`TOP-RANKED signal queued: ${signal.market} · ${signal.pick} · ${signal.family} · score ${signal.score}/100 · scope ${$('familyFilter').value} · queue ${autoOrderQueue.length}/3.`);
+  log(`MARKET-RANKED signal queued: ${signal.market} · ${signal.pick} · ${signal.family} · score ${signal.score}/100 · scope ${$('familyFilter').value} · queue ${autoOrderQueue.length}/${openCap} slots.`);
   drainAutoOrderQueue();
 }
 async function drainAutoOrderQueue(){
@@ -877,6 +922,7 @@ async function drainAutoOrderQueue(){
   autoQueueRunning=true;
   try{
     while(autoOrderQueue.length){
+      if(activeContracts.size>=maxOpenContracts())break;
       const signal=autoOrderQueue.shift();
       const key=signal?._autoKey;
       if(!signal)continue;
@@ -976,6 +1022,6 @@ const resumeScanAfterOAuth=(()=>{const q=new URLSearchParams(location.search);re
 renderAll();refreshAuth();renderTradeAccounts();updateTradeMetrics();
 $('refreshBalanceBtn').addEventListener('click',async()=>{const btn=$('refreshBalanceBtn');btn.disabled=true;$('balanceRefreshStatus').textContent='Refreshing balances from Deriv…';try{await refreshAuth();$('balanceRefreshStatus').textContent='Balance refresh request completed.';}catch(err){$('balanceRefreshStatus').textContent='Balance refresh failed: '+err.message;}finally{btn.disabled=false;}});
 setTimeout(()=>{if(!running)startScan();},350);
-log('Build V2.3-TOP-SIGNAL loaded: choose one family or ALL; AUTO queues only the highest-ranked qualified setup in the selected scope; trading remains disarmed until explicitly armed.');
+log('Build V2.4-FAST-AUTO-FRACTAL-MESH loaded: five-window shared Mesh, confirmed fractal/Bollinger context, per-market AUTO, one-request direct buys and concurrent-open guard; execution stays disarmed until explicitly armed.');
 </script>
 </body></html>
